@@ -18,7 +18,7 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  password              Password
+  password              Password?
   awardedCertifications StudentCertification[]
   awardedClasses        StudentClass[]
 }
