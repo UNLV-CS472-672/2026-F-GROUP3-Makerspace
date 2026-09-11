@@ -1,9 +1,8 @@
-# We don't want lockfiles in stacks, as people could use a different package manager
-# This part will be removed by `remix.init`
+# This project uses pnpm; commit pnpm-lock.yaml so CI and teammates install the
+# exact same versions. Lockfiles from other package managers are ignored so a
+# stray `npm install` does not add a second one.
 bun.lockb
 package-lock.json
-pnpm-lock.yaml
-pnpm-lock.yml
 yarn.lock
 
 node_modules

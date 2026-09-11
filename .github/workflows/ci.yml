@@ -23,18 +23,20 @@ jobs:
       - name: ⬇️ Checkout repo
         uses: actions/checkout@v4
 
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - name: ⎔ Setup node
         uses: actions/setup-node@v4
         with:
-          cache: npm
-          cache-dependency-path: ./package.json
+          cache: pnpm
           node-version: 18
 
       - name: 📥 Install deps
-        run: npm install
+        run: pnpm install --frozen-lockfile
 
       - name: 🔬 Lint
-        run: npm run lint
+        run: pnpm run lint
 
   typecheck:
     name: ʦ TypeScript
@@ -43,18 +45,20 @@ jobs:
       - name: ⬇️ Checkout repo
         uses: actions/checkout@v4
 
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - name: ⎔ Setup node
         uses: actions/setup-node@v4
         with:
-          cache: npm
-          cache-dependency-path: ./package.json
+          cache: pnpm
           node-version: 18
 
       - name: 📥 Install deps
-        run: npm install
+        run: pnpm install --frozen-lockfile
 
       - name: 🔎 Type check
-        run: npm run typecheck --if-present
+        run: pnpm run typecheck --if-present
 
   vitest:
     name: ⚡ Vitest
@@ -63,18 +67,20 @@ jobs:
       - name: ⬇️ Checkout repo
         uses: actions/checkout@v4
 
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - name: ⎔ Setup node
         uses: actions/setup-node@v4
         with:
-          cache: npm
-          cache-dependency-path: ./package.json
+          cache: pnpm
           node-version: 18
 
       - name: 📥 Install deps
-        run: npm install
+        run: pnpm install --frozen-lockfile
 
       - name: ⚡ Run vitest
-        run: npm run test -- --coverage
+        run: pnpm run test -- --coverage
 
   cypress:
     name: ⚫️ Cypress
@@ -86,15 +92,17 @@ jobs:
       - name: 🏄 Copy test env vars
         run: cp .env.example .env
 
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - name: ⎔ Setup node
         uses: actions/setup-node@v4
         with:
-          cache: npm
-          cache-dependency-path: ./package.json
+          cache: pnpm
           node-version: 18
 
       - name: 📥 Install deps
-        run: npm install
+        run: pnpm install --frozen-lockfile
 
       - name: 🐳 Start Postgres
         # Only the database is needed here; the app under test runs on the
@@ -103,15 +111,16 @@ jobs:
         run: docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --wait postgres
 
       - name: 🛠 Setup Database
-        run: npx prisma migrate reset --force
+        run: pnpm exec prisma migrate reset --force
 
       - name: ⚙️ Build
-        run: npm run build
+        run: pnpm run build
 
       - name: 🌳 Cypress run
         uses: cypress-io/github-action@v6
         with:
-          start: npm run start:mocks
+          install: false
+          start: pnpm run start:mocks
           wait-on: http://localhost:8811
         env:
           PORT: 8811
