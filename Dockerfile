@@ -1,0 +1,62 @@
+# base node image
+FROM node:18-bookworm-slim as base
+
+# set for base and all layer that inherit from it
+ENV NODE_ENV production
+
+# Install openssl for Prisma
+RUN apt-get update && apt-get install -y openssl
+
+# Install all node_modules, including dev dependencies
+FROM base as deps
+
+WORKDIR /myapp
+
+ADD package.json .npmrc ./
+RUN npm install --include=dev
+
+# Setup production node_modules
+FROM base as production-deps
+
+WORKDIR /myapp
+
+COPY --from=deps /myapp/node_modules /myapp/node_modules
+ADD package.json .npmrc ./
+RUN npm prune --omit=dev
+
+# Build the app
+FROM base as build
+
+WORKDIR /myapp
+
+COPY --from=deps /myapp/node_modules /myapp/node_modules
+
+ADD prisma .
+RUN npx prisma generate
+
+ADD . .
+RUN npm run build
+RUN ./node_modules/.bin/esbuild prisma/seed.ts \
+    --platform=node --format=cjs --outfile=build/seed.cjs
+
+# Finally, build the production image with minimal footprint
+FROM base
+
+WORKDIR /myapp
+
+COPY --from=production-deps /myapp/node_modules /myapp/node_modules
+COPY --from=build /myapp/node_modules/.prisma /myapp/node_modules/.prisma
+
+COPY --from=build /myapp/build /myapp/build
+COPY --from=build /myapp/public /myapp/public
+ADD . .
+
+# The Prisma client was already generated during the build stage above,
+# so migrations and the compiled seed run at startup. `prisma generate` must NOT run here:
+# it phones home to binaries.prisma.sh, which fails on hosts without
+# outbound internet (e.g. the Portainer box).
+# CHECKPOINT_DISABLE stops the Prisma CLI's update check, which is another
+# outbound request that would otherwise be attempted on every start.
+ENV CHECKPOINT_DISABLE=1
+
+CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && node build/seed.cjs && npm start"]
