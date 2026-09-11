@@ -1,0 +1,19 @@
+# This project uses pnpm; commit pnpm-lock.yaml so CI and teammates install the
+# exact same versions. Lockfiles from other package managers are ignored so a
+# stray `npm install` does not add a second one.
+bun.lockb
+package-lock.json
+yarn.lock
+
+node_modules
+
+/build
+/public/build
+.env
+
+/cypress/screenshots
+/cypress/videos
+/postgres-data
+
+# Personal editor settings
+/.vscode
