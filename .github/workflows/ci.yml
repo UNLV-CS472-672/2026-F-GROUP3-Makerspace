@@ -57,6 +57,9 @@ jobs:
       - name: 📥 Install deps
         run: pnpm install --frozen-lockfile
 
+      - name: 🧬 Generate Prisma client
+        run: pnpm exec prisma generate
+
       - name: 🔎 Type check
         run: pnpm run typecheck
 
@@ -78,6 +81,9 @@ jobs:
 
       - name: 📥 Install deps
         run: pnpm install --frozen-lockfile
+
+      - name: 🧬 Generate Prisma client
+        run: pnpm exec prisma generate
 
       - name: ⚡ Run vitest
         run: pnpm run test --coverage
@@ -113,8 +119,15 @@ jobs:
       - name: 🛠 Setup Database
         run: pnpm exec prisma migrate reset --force
 
+      - name: 🧬 Generate Prisma client
+        run: pnpm exec prisma generate
+
       - name: ⚙️ Build
         run: pnpm run build
+
+      - name: 🌲 Install Cypress binary
+        # No-op when the binary is already present.
+        run: pnpm exec cypress install
 
       - name: 🌳 Cypress run
         uses: cypress-io/github-action@v6
