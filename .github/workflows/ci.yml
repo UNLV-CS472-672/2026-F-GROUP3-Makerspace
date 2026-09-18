@@ -91,12 +91,14 @@ jobs:
   cypress:
     name: ⚫️ Cypress
     runs-on: ubuntu-latest
+    # Pinned here, not read from .env, so the job can never point at a real
+    # database. `prisma migrate reset` below WIPES whatever DATABASE_URL names.
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      SESSION_SECRET: ci-only-not-a-secret
     steps:
       - name: ⬇️ Checkout repo
         uses: actions/checkout@v7
-
-      - name: 🏄 Copy test env vars
-        run: cp .env.example .env
 
       - name: 📦 Setup pnpm
         uses: pnpm/action-setup@v6

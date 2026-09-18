@@ -1,41 +1,44 @@
 name: 🐛 Bug Report
-description: Something is wrong with the Stack.
+description: Something in the Makerspace app is broken or behaving unexpectedly.
+labels: ["bug"]
 body:
-  - type: markdown
+  - type: dropdown
     attributes:
-      value: >-
-        Thank you for helping to improve Remix!
-
-        Our bandwidth on maintaining these stacks is limited. As a team, we're
-        currently focusing our efforts on Remix itself. The good news is you can
-        fork and adjust this stack however you'd like and start using it today
-        as a custom stack. Learn more from
-        [the Remix Stacks docs](https://remix.run/stacks).
-
-        If you'd still like to report a bug, please fill out this form. We can't
-        promise a timely response, but hopefully when we have the bandwidth to
-        work on these stacks again we can take a look. Thanks!
-
-  - type: input
-    attributes:
-      label: Have you experienced this bug with the latest version of the template?
+      label: Area
+      description: Which part of the app is affected?
+      options:
+        - RebelCard check-in (scan page)
+        - Student results page
+        - Admin login / accounts
+        - Database / seed data
+        - CI / tooling
+        - Other
     validations:
       required: true
   - type: textarea
     attributes:
       label: Steps to Reproduce
-      description: Steps to reproduce the behavior.
+      description: Exact steps, including any RebelCard or NSHE ID used.
+      placeholder: |
+        1. Go to /
+        2. Enter card 1001234567
+        3. Click "Check In"
     validations:
       required: true
   - type: textarea
     attributes:
       label: Expected Behavior
-      description: A concise description of what you expected to happen.
+      description: What you expected to happen.
     validations:
       required: true
   - type: textarea
     attributes:
       label: Actual Behavior
-      description: A concise description of what you're experiencing.
+      description: What actually happened. Paste error messages or attach screenshots.
     validations:
       required: true
+  - type: input
+    attributes:
+      label: Environment
+      description: Where you saw it (local dev, Docker, deployed) and browser if relevant.
+      placeholder: local dev, Chrome
