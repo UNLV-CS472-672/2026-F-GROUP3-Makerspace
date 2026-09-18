@@ -52,7 +52,7 @@ model Student {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Certifications & Classes
+// Certifications
 // ─────────────────────────────────────────────────────────────
 
 /// A credential a student can hold (e.g. "Laser Cutter Safety & Operation").

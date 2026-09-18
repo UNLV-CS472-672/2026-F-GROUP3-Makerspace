@@ -37,18 +37,6 @@ async function seed(prisma: Prisma.TransactionClient) {
     });
   }
 
-  // ── Classes (each awards its matching certification) ─────────
-  for (const name of certNames) {
-    await prisma.class.upsert({
-      where: { name: `${name} — Training` },
-      update: {},
-      create: {
-        name: `${name} — Training`,
-        awardsCertificationId: certs[name].id,
-      },
-    });
-  }
-
   // ── Machine categories & machines ───────────────────────────
   const machines: {
     category: string;
