@@ -20,7 +20,6 @@ model User {
 
   password              Password?
   awardedCertifications StudentCertification[]
-  awardedClasses        StudentClass[]
 }
 
 model Password {
@@ -37,8 +36,7 @@ model Password {
 /// A UNLV student. `nsheId` is the stable identifier and is what
 /// /results/<nsheId> keys on. `rebelCardId` is the number on the
 /// student's current physical card; it changes whenever a card is
-/// re-printed, so an admin simply overwrites it. It's optional because
-/// a student can be enrolled before they've been issued a card.
+/// re-printed, so an admin simply overwrites it. 
 model Student {
   id          String @id @default(cuid())
   nsheId      String @unique
@@ -50,12 +48,11 @@ model Student {
   updatedAt DateTime @updatedAt
 
   certifications StudentCertification[]
-  classes        StudentClass[]
   accessLogs     AccessLog[]
 }
 
 // ─────────────────────────────────────────────────────────────
-// Certifications & Classes
+// Certifications
 // ─────────────────────────────────────────────────────────────
 
 /// A credential a student can hold (e.g. "Laser Cutter Safety & Operation").
@@ -70,7 +67,6 @@ model Certification {
 
   students         StudentCertification[]
   requiredBy       MachineRequirement[]
-  awardedByClasses Class[]
 }
 
 /// Join table: which students hold which certifications, and when.
@@ -87,37 +83,6 @@ model StudentCertification {
   awardedById String?
 
   @@id([studentId, certificationId])
-}
-
-/// A training class/course. Completing a class can optionally award a
-/// certification automatically.
-model Class {
-  id          String  @id @default(cuid())
-  name        String  @unique
-  description String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  awardsCertification   Certification? @relation(fields: [awardsCertificationId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  awardsCertificationId String?
-
-  students StudentClass[]
-}
-
-/// Join table: which students completed which classes, and when.
-model StudentClass {
-  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  studentId String
-  class     Class   @relation(fields: [classId], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  classId   String
-
-  completedAt DateTime @default(now())
-
-  awardedBy   User?   @relation(fields: [awardedById], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  awardedById String?
-
-  @@id([studentId, classId])
 }
 
 // ─────────────────────────────────────────────────────────────
