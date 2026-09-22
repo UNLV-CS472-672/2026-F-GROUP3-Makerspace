@@ -14,9 +14,6 @@ importers:
       '@prisma/client':
         specifier: ^5.20.0
         version: 5.22.0(prisma@5.22.0)
-      '@remix-run/css-bundle':
-        specifier: '*'
-        version: 2.17.5
       '@remix-run/express':
         specifier: '*'
         version: 2.17.5(express@4.22.2)(typescript@5.9.3)
@@ -65,6 +62,9 @@ importers:
       tiny-invariant:
         specifier: ^1.3.3
         version: 1.3.3
+      tsx:
+        specifier: ^4.23.15
+        version: 4.23.15
     devDependencies:
       '@faker-js/faker':
         specifier: ^9.0.3
@@ -194,10 +194,7 @@ importers:
         version: 2.1.5
       tailwindcss:
         specifier: ^3.4.13
-        version: 3.4.19(tsx@4.23.13)(yaml@2.9.0)
-      tsx:
-        specifier: ^4.19.1
-        version: 4.23.13
+        version: 3.4.19(tsx@4.23.15)(yaml@2.9.0)
       typescript:
         specifier: ^5.6.2
         version: 5.9.3
@@ -1195,10 +1192,6 @@ packages:
 
   '@prisma/get-platform@5.22.0':
     resolution: {integrity: sha512-pHhpQdr1UPFpt+zFfnPazhulaZYCUqeIcPpJViYoq9R+D/yw4fjE+CtnsnKzPYm0ddUbeXUzjGVGIRVgPDCk4Q==}
-
-  '@remix-run/css-bundle@2.17.5':
-    resolution: {integrity: sha512-7PA5nak53LYYJZUXMO6cLozEa05w5KOPPIPEJhpuhf3HCFet1MykXjQ1xtm9V8rkiJlPk75cwwg/aTAT18lVkw==}
-    engines: {node: '>=18.0.0'}
 
   '@remix-run/dev@2.17.5':
     resolution: {integrity: sha512-yEDrKcIICHnaJdUOdBAXQTNXoehB0J3FBcZr4CnK6Alic6cVJGGBGMtJdIO7DUwNySwoYvkUTS3qnXuk2zGYZA==}
@@ -5052,8 +5045,8 @@ packages:
     peerDependencies:
       typescript: '>=2.8.0 || >= 3.2.0-dev || >= 3.3.0-dev || >= 3.4.0-dev || >= 3.5.0-dev || >= 3.6.0-dev || >= 3.6.0-beta || >= 3.7.0-dev || >= 3.7.0-beta'
 
-  tsx@4.23.13:
-    resolution: {integrity: sha512-BL5MGkRln6aDYhb0xbQlEAGw743BaZYWdbWtdJOBriYJboKgUUYCadFp2/FpBBZquBC/ezNBn7wMMPx7FDZUDw==}
+  tsx@4.23.15:
+    resolution: {integrity: sha512-Yiex1Ovn8z2xPpOWckIiysV1SSyRMY9BkLF++q0yKiDxCqRhosKfMg3janKkiLBwZ5c/YryloKwGZcrEmtwxKw==}
     engines: {node: '>=18.0.0'}
     hasBin: true
 
@@ -6240,8 +6233,6 @@ snapshots:
   '@prisma/get-platform@5.22.0':
     dependencies:
       '@prisma/debug': 5.22.0
-
-  '@remix-run/css-bundle@2.17.5': {}
 
   '@remix-run/dev@2.17.5(@remix-run/react@2.17.5(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(typescript@5.9.3))(@types/node@20.19.43)(typescript@5.9.3)(vite@5.4.21(@types/node@20.19.43))':
     dependencies:
@@ -9888,13 +9879,13 @@ snapshots:
     optionalDependencies:
       postcss: 8.5.28
 
-  postcss-load-config@6.0.1(jiti@1.21.7)(postcss@8.5.28)(tsx@4.23.13)(yaml@2.9.0):
+  postcss-load-config@6.0.1(jiti@1.21.7)(postcss@8.5.28)(tsx@4.23.15)(yaml@2.9.0):
     dependencies:
       lilconfig: 3.1.3
     optionalDependencies:
       jiti: 1.21.7
       postcss: 8.5.28
-      tsx: 4.23.13
+      tsx: 4.23.15
       yaml: 2.9.0
 
   postcss-modules-extract-imports@3.1.0(postcss@8.5.28):
@@ -10630,7 +10621,7 @@ snapshots:
 
   tagged-tag@1.0.0: {}
 
-  tailwindcss@3.4.19(tsx@4.23.13)(yaml@2.9.0):
+  tailwindcss@3.4.19(tsx@4.23.15)(yaml@2.9.0):
     dependencies:
       '@alloc/quick-lru': 5.3.0
       arg: 5.0.2
@@ -10649,7 +10640,7 @@ snapshots:
       postcss: 8.5.28
       postcss-import: 15.1.0(postcss@8.5.28)
       postcss-js: 4.1.0(postcss@8.5.28)
-      postcss-load-config: 6.0.1(jiti@1.21.7)(postcss@8.5.28)(tsx@4.23.13)(yaml@2.9.0)
+      postcss-load-config: 6.0.1(jiti@1.21.7)(postcss@8.5.28)(tsx@4.23.15)(yaml@2.9.0)
       postcss-nested: 6.2.0(postcss@8.5.28)
       postcss-selector-parser: 6.1.4
       resolve: 1.22.12
@@ -10800,7 +10791,7 @@ snapshots:
       tslib: 1.14.1
       typescript: 5.9.3
 
-  tsx@4.23.13:
+  tsx@4.23.15:
     dependencies:
       esbuild: 0.28.2
     optionalDependencies:
