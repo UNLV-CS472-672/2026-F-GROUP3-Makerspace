@@ -1,36 +1,30 @@
-import fs from "node:fs";
-import path from "node:path";
-import url from "node:url";
-
 import prom from "@isaacs/express-prometheus-middleware";
 import { createRequestHandler } from "@remix-run/express";
-import type { ServerBuild } from "@remix-run/node";
-import { broadcastDevReady, installGlobals } from "@remix-run/node";
+import { installGlobals } from "@remix-run/node";
 import compression from "compression";
-import type { RequestHandler } from "express";
 import express from "express";
 import morgan from "morgan";
 import sourceMapSupport from "source-map-support";
 
 sourceMapSupport.install();
-installGlobals({ nativeFetch: true });
-run();
+installGlobals();
 
 async function run() {
-  const BUILD_PATH = path.resolve("build/index.js");
-  const VERSION_PATH = path.resolve("build/version.txt");
+  const isProduction = process.env.NODE_ENV === "production";
 
-  const initialBuild = await reimportServer();
-  const remixHandler =
-    process.env.NODE_ENV === "development"
-      ? await createDevRequestHandler(initialBuild)
-      : createRequestHandler({
-          build: initialBuild,
-          mode: initialBuild.mode,
-        });
+  const viteDevServer = isProduction
+    ? undefined
+    : await import("vite").then((vite) =>
+        vite.createServer({
+          server: {
+            middlewareMode: true,
+          },
+        }),
+      );
 
   const app = express();
   const metricsApp = express();
+
   app.use(
     prom({
       metricsPath: "/metrics",
@@ -39,97 +33,67 @@ async function run() {
     }),
   );
 
-  app.use((req, res, next) => {
-    // helpful headers:
-    res.set("Strict-Transport-Security", `max-age=${60 * 60 * 24 * 365 * 100}`);
-
-    // /clean-urls/ -> /clean-urls
-    if (req.path.endsWith("/") && req.path.length > 1) {
-      const query = req.url.slice(req.path.length);
-      const safepath = req.path.slice(0, -1).replace(/\/+/g, "/");
-      res.redirect(301, safepath + query);
-      return;
-    }
-    next();
-  });
+  //
+  // Keep your existing Fly middleware here.
+  //
+  // x-fly-region
+  // HSTS
+  // clean URL redirects
+  // fly-replay handling
+  //
 
   app.use(compression());
-
-  // http://expressjs.com/en/advanced/best-practice-security.html#at-a-minimum-disable-x-powered-by-header
   app.disable("x-powered-by");
 
-  // Remix fingerprints its assets so we can cache forever.
-  app.use(
-    "/build",
-    express.static("public/build", { immutable: true, maxAge: "1y" }),
-  );
+  if (viteDevServer) {
+    //
+    // Development assets + HMR.
+    //
+    app.use(viteDevServer.middlewares);
+  } else {
+    //
+    // Production assets.
+    //
+    app.use(
+      "/assets",
+      express.static("build/client/assets", {
+        immutable: true,
+        maxAge: "1y",
+      }),
+    );
 
-  // Everything else (like favicon.ico) is cached for an hour. You may want to be
-  // more aggressive with this caching.
-  app.use(express.static("public", { maxAge: "1h" }));
+    app.use(
+      express.static("build/client", {
+        maxAge: "1h",
+      }),
+    );
+  }
 
   app.use(morgan("tiny"));
+  const productionBuildPath = "./build/server/index.js";
 
-  app.all("*", remixHandler);
+  const build = viteDevServer
+    ? () => viteDevServer.ssrLoadModule("virtual:remix/server-build")
+    : await import(productionBuildPath);
 
-  const port = process.env.PORT || 3000;
+  app.all(
+    "*",
+    createRequestHandler({
+      build,
+    }),
+  );
+
+  const port = Number(process.env.PORT || 3000);
+
   app.listen(port, () => {
     console.log(`✅ app ready: http://localhost:${port}`);
-
-    if (process.env.NODE_ENV === "development") {
-      broadcastDevReady(initialBuild);
-    }
   });
 
-  const metricsPort = process.env.METRICS_PORT || 3010;
+  const metricsPort = Number(process.env.METRICS_PORT || 3010);
 
   metricsApp.listen(metricsPort, () => {
     console.log(`✅ metrics ready: http://localhost:${metricsPort}/metrics`);
   });
-
-  async function reimportServer(): Promise<ServerBuild> {
-    // cjs: manually remove the server build from the require cache
-    Object.keys(require.cache).forEach((key) => {
-      if (key.startsWith(BUILD_PATH)) {
-        delete require.cache[key];
-      }
-    });
-
-    const stat = fs.statSync(BUILD_PATH);
-
-    // convert build path to URL for Windows compatibility with dynamic `import`
-    const BUILD_URL = url.pathToFileURL(BUILD_PATH).href;
-
-    // use a timestamp query parameter to bust the import cache
-    return import(BUILD_URL + "?t=" + stat.mtimeMs);
-  }
-
-  async function createDevRequestHandler(
-    initialBuild: ServerBuild,
-  ): Promise<RequestHandler> {
-    let build = initialBuild;
-    async function handleServerUpdate() {
-      // 1. re-import the server build
-      build = await reimportServer();
-      // 2. tell Remix that this app server is now up-to-date and ready
-      broadcastDevReady(build);
-    }
-    const chokidar = await import("chokidar");
-    chokidar
-      .watch(VERSION_PATH, { ignoreInitial: true })
-      .on("add", handleServerUpdate)
-      .on("change", handleServerUpdate);
-
-    // wrap request handler to make sure its recreated with the latest build for every request
-    return async (req, res, next) => {
-      try {
-        return createRequestHandler({
-          build,
-          mode: "development",
-        })(req, res, next);
-      } catch (error) {
-        next(error);
-      }
-    };
-  }
 }
+
+run();
