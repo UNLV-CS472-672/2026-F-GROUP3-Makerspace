@@ -17,3 +17,6 @@ node_modules
 
 # Personal editor settings
 /.vscode
+
+# ESP8266 local Wi-Fi credentials
+satellite/esp8266/esp8266_satellite/secrets.h
