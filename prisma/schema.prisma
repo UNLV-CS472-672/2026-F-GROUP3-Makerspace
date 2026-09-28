@@ -14,12 +14,15 @@ generator client {
 model User {
   id    String @id @default(cuid())
   email String @unique
+  roles String @default("staff")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   password              Password?
   awardedCertifications StudentCertification[]
+  restrictionsCreated StudentRestriction[] @relation("RestrictionCreatedBy")
+  restrictionsRevoked StudentRestriction[] @relation("RestrictionRevokedBy")
 }
 
 model Password {
@@ -49,6 +52,7 @@ model Student {
 
   certifications StudentCertification[]
   accessLogs     AccessLog[]
+  restrictions  StudentRestriction[]
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -83,6 +87,31 @@ model StudentCertification {
   awardedById String?
 
   @@id([studentId, certificationId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Student Restrictions
+// ─────────────────────────────────────────────────────────────
+
+model StudentRestriction {
+  id        String   @id @default(cuid())
+  reason    String
+  createdAt DateTime @default(now())
+  expiresAt DateTime?
+
+  // Set these when an administrator lifts the restriction.
+  revokedAt DateTime?
+
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId String
+
+  createdBy   User?   @relation("RestrictionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdById String?
+
+  revokedBy   User?   @relation("RestrictionRevokedBy", fields: [revokedById], references: [id], onDelete: SetNull)
+  revokedById String?
+
+  @@index([studentId, revokedAt, expiresAt])
 }
 
 // ─────────────────────────────────────────────────────────────
