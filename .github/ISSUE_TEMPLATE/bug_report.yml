@@ -1,0 +1,44 @@
+name: 🐛 Bug Report
+description: Something in the Makerspace app is broken or behaving unexpectedly.
+labels: ["bug"]
+body:
+  - type: dropdown
+    attributes:
+      label: Area
+      description: Which part of the app is affected?
+      options:
+        - RebelCard check-in (scan page)
+        - Student results page
+        - Admin login / accounts
+        - Database / seed data
+        - CI / tooling
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Steps to Reproduce
+      description: Exact steps, including any RebelCard or NSHE ID used.
+      placeholder: |
+        1. Go to /
+        2. Enter card 1001234567
+        3. Click "Check In"
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Expected Behavior
+      description: What you expected to happen.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Actual Behavior
+      description: What actually happened. Paste error messages or attach screenshots.
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Environment
+      description: Where you saw it (local dev, Docker, deployed) and browser if relevant.
+      placeholder: local dev, Chrome

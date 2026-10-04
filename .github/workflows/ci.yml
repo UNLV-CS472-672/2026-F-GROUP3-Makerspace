@@ -1,0 +1,141 @@
+name: 🚀 CI
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  lint:
+    name: ⬣ ESLint
+    runs-on: ubuntu-latest
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v7
+
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: ⎔ Setup node
+        uses: actions/setup-node@v7
+        with:
+          cache: pnpm
+          node-version: 22
+
+      - name: 📥 Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: 🔬 Lint
+        run: pnpm run lint
+
+  typecheck:
+    name: ʦ TypeScript
+    runs-on: ubuntu-latest
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v7
+
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: ⎔ Setup node
+        uses: actions/setup-node@v7
+        with:
+          cache: pnpm
+          node-version: 22
+
+      - name: 📥 Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: 🧬 Generate Prisma client
+        run: pnpm exec prisma generate
+
+      - name: 🔎 Type check
+        run: pnpm run typecheck
+
+  vitest:
+    name: ⚡ Vitest
+    runs-on: ubuntu-latest
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v7
+
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: ⎔ Setup node
+        uses: actions/setup-node@v7
+        with:
+          cache: pnpm
+          node-version: 22
+
+      - name: 📥 Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: 🧬 Generate Prisma client
+        run: pnpm exec prisma generate
+
+      - name: ⚡ Run vitest
+        run: pnpm run test --coverage
+
+  cypress:
+    name: ⚫️ Cypress
+    runs-on: ubuntu-latest
+    # Pinned here, not read from .env, so the job can never point at a real
+    # database. `prisma migrate reset` below WIPES whatever DATABASE_URL names.
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      SESSION_SECRET: ci-only-not-a-secret
+    steps:
+      - name: ⬇️ Checkout repo
+        uses: actions/checkout@v7
+
+      - name: 📦 Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: ⎔ Setup node
+        uses: actions/setup-node@v7
+        with:
+          cache: pnpm
+          node-version: 22
+
+      - name: 📥 Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: 🐳 Start Postgres
+        # Only the database is needed here; the app under test runs on the
+        # runner. The CI overlay publishes 5432 and --wait blocks until the
+        # container healthcheck passes.
+        run: docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --wait postgres
+
+      - name: 🛠 Setup Database
+        run: pnpm exec prisma migrate reset --force
+
+      - name: 🧬 Generate Prisma client
+        run: pnpm exec prisma generate
+
+      - name: ⚙️ Build
+        run: pnpm run build
+
+      - name: 🌲 Install Cypress binary
+        # No-op when the binary is already present.
+        run: pnpm exec cypress install
+
+      - name: 🌳 Cypress run
+        uses: cypress-io/github-action@v7
+        with:
+          install: false
+          start: pnpm run start:mocks
+          wait-on: http://localhost:8811
+        env:
+          PORT: 8811

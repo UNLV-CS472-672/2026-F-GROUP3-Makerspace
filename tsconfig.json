@@ -1,0 +1,27 @@
+{
+  "exclude": ["./cypress", "./cypress.config.ts"],
+  "include": ["**/*.ts", "**/*.tsx"],
+  "compilerOptions": {
+    "types": ["@remix-run/node", "vite/client", "vitest/globals"],
+
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+
+    "skipLibCheck": true,
+
+    "lib": ["DOM", "DOM.Iterable", "ES2020"],
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "jsx": "react-jsx",
+    "resolveJsonModule": true,
+    "target": "ES2020",
+    "strict": true,
+    "allowJs": true,
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".",
+    "paths": {
+      "~/*": ["./app/*"]
+    },
+    "noEmit": true
+  }
+}

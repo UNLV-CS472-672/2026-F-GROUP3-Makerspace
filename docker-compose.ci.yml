@@ -1,0 +1,12 @@
+# CI-only overlay for docker-compose.yml.
+#
+# The Cypress job runs the app and `prisma migrate reset` on the runner itself,
+# not inside Docker, so Postgres must be reachable on the host. The base file
+# deliberately does not publish the database port (it is the deployment
+# config), so CI layers this on top and starts only the postgres service:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --wait postgres
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"
