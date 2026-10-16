@@ -10,8 +10,8 @@ latest CI and repository-lint workflows on `main` pass.
 The earlier FastAPI/PostgreSQL prototype should not be merged at the repository
 root. It uses a different application stack, and its source branch also descends
 from a repository containing unrelated course labs. The safe integration is the
-isolated historical archive in this branch, followed by focused issues and PRs
-that port only still-needed capabilities into the active Remix application.
+isolated development baseline in this branch, followed by focused issues and
+PRs that port only still-needed capabilities into the active Remix application.
 
 ## Current team repository
 
@@ -76,7 +76,8 @@ The relevant prototype is
 `berhea1/Group-3:feature/pre-senior-design-baseline` at `c8467f5`. It has four
 prototype-specific commits by Omari Rich and is represented by the still-open
 historical PR `berhea1/Group-3#80`. That PR remains untouched as an attribution
-record.
+record. The old repository is no longer a development target; all new work
+should be proposed against the current team repository.
 
 The active Remix repository does not need the prototype's framework,
 deployment, or database schema at its root. Still-useful behavior that is not
@@ -89,8 +90,8 @@ yet present in the active application includes:
 
 ## Safe integration order
 
-1. Review the historical archive branch and agree on whether the prototype
-   should live in the new repository. Merge only through a reviewed PR.
+1. Review this baseline-transfer branch and agree on the baseline's inclusion in
+   the current repository. Merge only through a reviewed PR.
 2. Keep the active Remix/Prisma tree authoritative. Do not merge the old
    repository root, old Docker Compose file, or SQL bootstrap schema over it.
 3. Coordinate with `davidpenrose` before contributing to issues #13 or #15.
@@ -106,6 +107,10 @@ yet present in the active application includes:
    own issue, branch, tests, and PR.
 7. Revisit preview deployment only after an infrastructure review; do not copy
    the old Portainer assumptions into the active stack by default.
+
+The separate
+[`Design Portfolio II readiness checklist`](design-portfolio-ii-readiness.md)
+maps this order to the current October 25, 2026 course deliverable.
 
 ## Recommended branch discipline
 

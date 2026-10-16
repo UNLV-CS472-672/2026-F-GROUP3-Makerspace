@@ -2,12 +2,16 @@
 
 ## Purpose
 
-This repository's active application is the Remix/Prisma implementation at the
-repository root. The files under
+The files under
 [`archive/pre-senior-design-fastapi`](../archive/pre-senior-design-fastapi)
-preserve an earlier FastAPI/PostgreSQL prototype as historical reference. They
-are intentionally isolated so importing the prototype does not replace or
-silently modify work already contributed to the active application.
+transfer the project's earlier FastAPI/PostgreSQL prototype into the current
+team repository. This makes the initial baseline and its authorship part of the
+new repository's reviewable development record instead of leaving that context
+only in a repository the team no longer uses.
+
+The Remix/Prisma implementation at the repository root remains the active
+application. The baseline is intentionally isolated so the transfer does not
+replace or silently modify work already contributed by current teammates.
 
 ## Source and attribution
 
@@ -16,6 +20,11 @@ Design and later committed to `berhea1/Group-3` on the
 `feature/pre-senior-design-baseline` branch. The source branch is represented by
 open pull request
 [`berhea1/Group-3#80`](https://github.com/berhea1/Group-3/pull/80).
+
+The old repository and PR are source evidence only; new development should
+continue in `UNLV-CS472-672/2026-F-GROUP3-Makerspace`. The transfer preserves
+the fact that this code predates Senior Design and does not present the
+pre-course implementation as work completed during the course.
 
 The imported snapshot is `c8467f5d83fef81cb1162f5107c342ca97fe5a7d`.
 Its prototype-specific history is:
@@ -67,5 +76,7 @@ repository and would conflict with this project's existing workflows.
   branch, with tests against the active Remix application.
 - Preserve the original attribution when archived logic materially informs a
   new implementation.
+- Treat the baseline as the documented starting point, not as a substitute for
+  current-course issues, implementation, testing, peer review, or MVP evidence.
 - Keep current-team contributions on `main`; do not merge the old repository's
   root tree into this one.
