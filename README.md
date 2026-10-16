@@ -28,3 +28,6 @@ deployment, or CI workflow.
 
 See [`docs/pre-senior-design-baseline.md`](docs/pre-senior-design-baseline.md)
 for provenance, the exact source commits, and a feature-by-feature comparison.
+The dated
+[`repository integration audit`](docs/repository-integration-audit-2026-10-15.md)
+records the branch, PR, issue, and recommended work-order findings.
