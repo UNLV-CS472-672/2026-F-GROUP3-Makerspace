@@ -44,11 +44,13 @@ function machine(
   };
 }
 
-// Run the actual results-page loader with a test NSHE ID.
+ // Run the actual results-page loader with a test NSHE ID.
 async function loadEligibilityResults(nsheId = "1000000000") {
   return loader({
+    request: new Request(`http://localhost/results/${nsheId}`),
     params: { nsheId },
-  } as LoaderFunctionArgs);
+    context: {},
+  } satisfies LoaderFunctionArgs);
 }
 
 // Clear mocked database responses before each test.
