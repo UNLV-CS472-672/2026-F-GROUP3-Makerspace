@@ -1,0 +1,31 @@
+name: Staging Health-Check Tests
+
+on:
+  push:
+    paths:
+      - "scripts/check-staging.sh"
+      - "scripts/test-check-staging.sh"
+      - ".github/workflows/staging-healthcheck.yml"
+
+  pull_request:
+    paths:
+      - "scripts/check-staging.sh"
+      - "scripts/test-check-staging.sh"
+      - ".github/workflows/staging-healthcheck.yml"
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-healthcheck:
+    name: Test staging health-check script
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run automated health-check tests
+        run: bash scripts/test-check-staging.sh
