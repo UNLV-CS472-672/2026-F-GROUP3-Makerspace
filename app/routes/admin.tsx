@@ -1,14 +1,57 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
-import { Link, useLoaderData } from "@remix-run/react";
+import { redirect } from "@remix-run/node";
+import { Link, useLoaderData, useCatch } from "@remix-run/react";
 import { useState } from "react";
 
-export async function loader({ request }: LoaderFunctionArgs) {
-  // Placeholder for the initial UI.
-  // Query students from Prisma later.
-  // Add authorization checks before exposing admin functionality.
+/**
+ * IMPORTANT:
+ * - Replace `getUser` with your project's session/auth helper.
+ *   Example implementations:
+ *     - export async function getUser(request: Request) { ... }
+ *     - export async function requireUser(request: Request) { ... }
+ *
+ * - The code below assumes `getUser(request)` returns either `null` (not authenticated)
+ *   or a user object { id, email, name, isAdmin?, roles?: string[] }.
+ */
+import { getUser } from "~/utils/session.server";
 
+export async function loader({ request }: LoaderFunctionArgs) {
+  // Protect the admin route:
+  // 1) If the user is not authenticated -> redirect to login page (with redirectTo).
+  // 2) If authenticated but not an admin -> throw 403 (caught by CatchBoundary).
+  // 3) Otherwise return necessary data for the admin UI.
+
+  const url = new URL(request.url);
+
+  // getUser/requireAdmin/etc should be implemented in your app; adapt to 
+  // actual function name and return shape. 
+  const user = await getUser(request);
+
+  if (!user) {
+    // Redirect to login and preserve where they wanted to go.
+    const redirectTo = url.pathname + url.search;
+    return redirect(`/login?redirectTo=${encodeURIComponent(redirectTo)}`);
+  }
+
+  // Adjust this check to match user object (isAdmin, roles array, etc.)
+  const isAdmin =
+    (user as any).isAdmin === true ||
+    Array.isArray((user as any).roles) &&
+      (user as any).roles.includes("admin");
+
+  if (!isAdmin) {
+    // Throw a 403 that the route's CatchBoundary will render nicely.
+    throw new Response("Forbidden", { status: 403 });
+  }
+
+  // At this stage the user is authenticated and authorized.
   return {
     success: true,
+    user: {
+      id: (user as any).id,
+      name: (user as any).name,
+      email: (user as any).email,
+    },
   };
 }
 
@@ -54,7 +97,7 @@ export default function AdminPage() {
 
         <p className="mt-2 text-sm text-gray-400">
           {loaderData.success
-            ? "Admin page is ready for development."
+            ? `Admin page is ready for development. Signed in as ${loaderData.user?.email ?? "admin"}`
             : "Unable to load the admin page."}
         </p>
 
@@ -260,6 +303,70 @@ export default function AdminPage() {
         <button className="flex h-10 w-10 items-center justify-center rounded-full bg-[#111111] border border-gray-700 text-gray-300">
           ?
         </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * User-friendly 403 UI when an authenticated non-admin reaches this route.
+ * Remix catches thrown Responses and passes them to useCatch() here.
+ */
+export function CatchBoundary() {
+  const caught = useCatch();
+
+  if (caught.status === 403) {
+    return (
+      <div className="min-h-screen bg-[#0f0f0f] text-white flex items-center justify-center">
+        <div className="max-w-xl text-center rounded border border-gray-800 bg-[#0c0c0c] p-8">
+          <h1 className="text-2xl font-bold">Access denied</h1>
+          <p className="mt-4 text-gray-400">
+            You do not have permission to view the Makerspace admin console.
+          </p>
+
+          <div className="mt-6 flex justify-center gap-4">
+            <Link
+              to="/"
+              className="rounded bg-[#2b2b2b] px-4 py-2 text-sm font-semibold"
+            >
+              Return to scanner
+            </Link>
+
+            <Link
+              to="/"
+              className="rounded bg-[#c00000] px-4 py-2 text-sm font-semibold"
+            >
+              Contact admin
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#0f0f0f] text-white flex items-center justify-center">
+      <div className="max-w-xl text-center">
+        <h1 className="text-2xl font-bold">Something went wrong</h1>
+        <p className="mt-4 text-gray-400">{caught.statusText || "Unknown"}</p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Error boundary for unexpected runtime errors in this route.
+ */
+export function ErrorBoundary({ error }: { error: Error }) {
+  console.error("Admin route error:", error);
+
+  return (
+    <div className="min-h-screen bg-[#0f0f0f] text-white flex items-center justify-center">
+      <div className="max-w-xl text-center">
+        <h1 className="text-2xl font-bold">Unexpected error</h1>
+        <p className="mt-4 text-gray-400">
+          An unexpected error occurred while loading the admin console.
+        </p>
       </div>
     </div>
   );
