@@ -1,5 +1,6 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
+#include <ArduinoJson.h>
 
 #include "secrets.h"
 
@@ -19,6 +20,70 @@ void handleNotFound() {
     "application/json",
     "{\"error\":\"not_found\"}"
   );
+}
+
+void handleCommand() {
+    // Reject requests without the correct API key.
+  if (!server.hasHeader("X-API-Key") ||
+      server.header("X-API-Key") != COMMAND_API_KEY) {
+    server.send(
+      401,
+      "application/json",
+      "{\"success\":false,\"error\":\"unauthorized\"}"
+    );
+    return;
+  }
+  // Check whether the request contains a body.
+  if (!server.hasArg("plain")) {
+    server.send(
+      400,
+      "application/json",
+      "{\"success\":false,\"error\":\"missing_body\"}"
+    );
+    return;
+  }
+
+  // Parse the JSON request body.
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, server.arg("plain"));
+
+  if (error) {
+    server.send(
+      400,
+      "application/json",
+      "{\"success\":false,\"error\":\"invalid_json\"}"
+    );
+    return;
+  }
+
+  // Verify that the command is a string.
+  if (!doc["command"].is<const char*>()) {
+    server.send(
+      400,
+      "application/json",
+      "{\"success\":false,\"error\":\"missing_or_invalid_command\"}"
+    );
+    return;
+  }
+
+  const char* command = doc["command"].as<const char*>();
+
+  // Process the supported PING command.
+  if (strcmp(command, "PING") == 0) {
+    Serial.println("Command received: PING");
+
+    server.send(
+      200,
+      "application/json",
+      "{\"success\":true,\"message\":\"PING received\"}"
+    );
+  } else {
+    server.send(
+      400,
+      "application/json",
+      "{\"success\":false,\"error\":\"unsupported_command\"}"
+    );
+  }
 }
 
 void setup() {
@@ -43,7 +108,9 @@ void setup() {
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
 
+  server.collectHeaders("X-API-Key");
   server.on("/status", HTTP_GET, handleStatus);
+  server.on("/command", HTTP_POST, handleCommand);
   server.onNotFound(handleNotFound);
 
   server.begin();
