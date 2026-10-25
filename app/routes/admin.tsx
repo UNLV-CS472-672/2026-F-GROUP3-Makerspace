@@ -1,8 +1,11 @@
-import { redirect, type LoaderFunctionArgs } from "@remix-run/node";
-import { Link, useLoaderData } from "@remix-run/react";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import { json, redirect } from "@remix-run/node";
+import { Form, Link, useActionData, useLoaderData } from "@remix-run/react";
 import { useState } from "react";
 
+import { prisma } from "~/db.server";
 import { getUser } from "~/session.server";
+import { validateEmail } from "~/utils";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
@@ -25,6 +28,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
     throw new Response("Forbidden", { status: 403 });
   }
 
+  const students = await prisma.student.findMany({
+    orderBy: { name: "asc" },
+    include: { certifications: true },
+  });
+
+  // At this stage the user is authenticated and authorized.
   return {
     success: true,
     user: {
@@ -32,11 +41,61 @@ export async function loader({ request }: LoaderFunctionArgs) {
       email: user.email,
       roles: roles.join(", "),
     },
+    students: students.map((student) => ({
+      id: student.id,
+      name: student.name,
+      nshe: student.nsheId,
+      rebel: student.rebelCardId,
+      email: student.email,
+      certs: student.certifications.length,
+    })),
   };
+}
+
+export async function action({ request }: ActionFunctionArgs) {
+  // A form POST skips the loader, so the admin check has to run again here.
+  const user = await getUser(request);
+  const roles = (user?.roles ?? "")
+    .split(",")
+    .map((role) => role.trim().toLowerCase());
+  if (!user || !roles.includes("admin")) {
+    throw new Response("Forbidden", { status: 403 });
+  }
+
+  const formData = await request.formData();
+  const name = String(formData.get("fullName") ?? "").trim();
+  const nsheId = String(formData.get("nsheId") ?? "").trim();
+  const rebelCardId = String(formData.get("rebelCardId") ?? "").trim();
+  const email = String(formData.get("studentEmail") ?? "").trim();
+
+  const errors: Record<string, string> = {};
+  if (!name) errors.fullName = "Name is required";
+  if (!/^\d{10}$/.test(nsheId)) errors.nsheId = "NSHE ID must be 10 digits";
+  if (!/^\d{10}$/.test(rebelCardId))
+    errors.rebelCardId = "RebelCard ID must be 10 digits";
+  if (!validateEmail(email)) errors.studentEmail = "Email is invalid";
+  if (Object.keys(errors).length > 0) {
+    return json({ errors }, { status: 400 });
+  }
+
+  const existing = await prisma.student.findFirst({
+    where: { OR: [{ nsheId }, { rebelCardId }, { email }] },
+  });
+    if (existing) {
+    errors.form =
+      "A student with this NSHE ID, RebelCard ID, or email already exists";
+    return json({ errors }, { status: 400 });
+  }
+
+  await prisma.student.create({
+    data: { name, nsheId, rebelCardId, email },
+  });
+  return redirect("/admin");
 }
 
 export default function AdminPage() {
   const loaderData = useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
   const [activeTab, setActiveTab] = useState<"users" | "machines" | "certs">(
     "users",
   );
@@ -153,31 +212,9 @@ export default function AdminPage() {
             </div>
 
             <div className="divide-y divide-gray-800">
-              {[
-                {
-                  name: "Maria Sanchez",
-                  nshe: "2001234567",
-                  rebel: "1001234567",
-                  email: "m.sanchez@unlv.nevada.edu",
-                  certs: 2,
-                },
-                {
-                  name: "James Okafor",
-                  nshe: "2009876543",
-                  rebel: "1009876543",
-                  email: "j.okafor@unlv.nevada.edu",
-                  certs: 4,
-                },
-                {
-                  name: "Taylor Kim",
-                  nshe: "2005551234",
-                  rebel: "1005551234",
-                  email: "t.kim@unlv.nevada.edu",
-                  certs: 0,
-                },
-              ].map((row, index) => (
+            {loaderData.students.map((row) => (
                 <div
-                  key={`${row.email}-${index}`}
+                  key={row.id}
                   className="grid grid-cols-12 gap-4 px-6 py-4 items-center text-sm"
                 >
                   <div className="col-span-4">
@@ -208,28 +245,54 @@ export default function AdminPage() {
         </section>
 
         <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2">
-          <div className="rounded border border-gray-800 bg-[#0c0c0c] p-6">
+          {/* Left: Add New Student */}
+          <Form
+            method="post"
+            className="rounded border border-gray-800 bg-[#0c0c0c] p-6"
+          >
             <h3 className="mb-4 text-sm uppercase text-gray-400">
               Add New Student
             </h3>
+
+            {actionData?.errors?.form ? (
+              <p className="mb-4 text-sm text-red-400">
+                {actionData.errors.form}
+              </p>
+            ) : null}
 
             <label htmlFor="fullName" className="mb-2 block text-xs text-gray-400">
               Full name
             </label>
             <input
               id="fullName"
-              className="mb-4 w-full rounded bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500 border border-gray-800"
+              name="fullName"
+              className="w-full rounded border border-gray-800 bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500"
               placeholder="Jane Smith"
             />
+            {actionData?.errors?.fullName ? (
+              <p className="mb-4 pt-1 text-xs text-red-400">
+                {actionData.errors.fullName}
+              </p>
+            ) : (
+              <div className="mb-4" />
+            )}
 
             <label htmlFor="nsheId" className="mb-2 block text-xs text-gray-400">
               NSHE ID
             </label>
             <input
               id="nsheId"
-              className="mb-4 w-full rounded bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500 border border-gray-800"
+              name="nsheId"
+              className="w-full rounded border border-gray-800 bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500"
               placeholder="2001234567"
             />
+            {actionData?.errors?.nsheId ? (
+              <p className="mb-4 pt-1 text-xs text-red-400">
+                {actionData.errors.nsheId}
+              </p>
+            ) : (
+              <div className="mb-4" />
+            )}
 
             <label
               htmlFor="rebelCardId"
@@ -239,9 +302,17 @@ export default function AdminPage() {
             </label>
             <input
               id="rebelCardId"
-              className="mb-4 w-full rounded bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500 border border-gray-800"
+              name="rebelCardId"
+              className="w-full rounded border border-gray-800 bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500"
               placeholder="1001234567"
             />
+            {actionData?.errors?.rebelCardId ? (
+              <p className="mb-4 pt-1 text-xs text-red-400">
+                {actionData.errors.rebelCardId}
+              </p>
+            ) : (
+              <div className="mb-4" />
+            )}
 
             <label
               htmlFor="studentEmail"
@@ -251,14 +322,25 @@ export default function AdminPage() {
             </label>
             <input
               id="studentEmail"
-              className="mb-6 w-full rounded bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500 border border-gray-800"
+              name="studentEmail"
+              className="w-full rounded border border-gray-800 bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500"
               placeholder="j.smith@unlv.nevada.edu"
             />
+            {actionData?.errors?.studentEmail ? (
+              <p className="mb-4 pt-1 text-xs text-red-400">
+                {actionData.errors.studentEmail}
+              </p>
+            ) : (
+              <div className="mb-6" />
+            )}
 
-            <button className="rounded bg-[#c00000] px-5 py-2 text-sm font-semibold transition-opacity hover:opacity-90">
+            <button
+              type="submit"
+              className="rounded bg-[#c00000] px-5 py-2 text-sm font-semibold transition-opacity hover:opacity-90"
+            >
               Add Student
             </button>
-          </div>
+          </Form>
 
           <div className="rounded border border-gray-800 bg-[#0c0c0c] p-6">
             <h3 className="mb-4 text-sm uppercase text-gray-400">
