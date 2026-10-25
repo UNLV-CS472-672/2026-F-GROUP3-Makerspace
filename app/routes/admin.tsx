@@ -5,15 +5,22 @@ import { useState } from "react";
 import { getUser } from "~/session.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
+   // Protect the admin route:
+  // 1) If the user is not authenticated -> redirect to login page (with redirectTo).
+  // 2) If authenticated but not an admin -> throw 403.
+  // 3) Otherwise return necessary data for the admin UI.
   const url = new URL(request.url);
 
   const user = await getUser(request);
 
   if (!user) {
+    // Redirect to login and preserve where they wanted to go.
     const redirectTo = url.pathname + url.search;
     return redirect(`/login?redirectTo=${encodeURIComponent(redirectTo)}`);
   }
 
+  // In this repo, roles is a string on the User model, e.g. "staff" or "admin".
+  // Normalize it into an array before checking access.
   const roles = (user.roles ?? "")
     .split(",")
     .map((role) => role.trim().toLowerCase())
@@ -22,9 +29,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const isAdmin = roles.includes("admin");
 
   if (!isAdmin) {
+    // Throw a 403 that will display a denial message.
     throw new Response("Forbidden", { status: 403 });
   }
 
+  // At this stage the user is authenticated and authorized.
   return {
     success: true,
     user: {
@@ -35,6 +44,23 @@ export async function loader({ request }: LoaderFunctionArgs) {
   };
 }
 
+/**
+ * TODO: 
+ * - Render the admin dashboard with tabs for Users, Machines,
+ *    and Certifications. 
+ * - Each tab should display relevant data and 
+ *   provide functionality to manage users, machines, and certifications. 
+ * - Implement forms for adding new students and linking NSHE IDs to 
+ *    RebelCard IDs. 
+ * - Ensure proper styling and responsive design for the 
+ *    admin console.
+ * 
+ * AI Usage: Github Copilot was used to assist in writing the code for the admin 
+ *           dashboard UI elements such as buttons, tabs, and forms. It provided 
+ *           suggestions for JSX structure and Tailwind CSS classes to achieve the 
+ *           desired layout and styling.
+ * 
+ */
 export default function AdminPage() {
   const loaderData = useLoaderData<typeof loader>();
   const [activeTab, setActiveTab] = useState<"users" | "machines" | "certs">(
@@ -49,9 +75,11 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-[#0f0f0f] text-white">
+      {/* Top header */}
       <header className="h-20 bg-[#c00000]">
         <div className="mx-auto flex h-full max-w-6xl items-center justify-between px-6">
           <div className="flex items-center gap-4">
+            {/* Circular UNLV mark */}
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-[#c00000] font-bold">
               UNLV
             </div>
@@ -74,7 +102,7 @@ export default function AdminPage() {
           </Link>
         </div>
       </header>
-
+      {/* Main content */}
       <main className="mx-auto max-w-6xl px-6 py-8">
         <h1 className="text-xl font-bold">Admin Dashboard</h1>
 
@@ -83,7 +111,7 @@ export default function AdminPage() {
             ? `Admin page is ready for development. Signed in as ${loaderData.user?.email ?? "admin"}`
             : "Unable to load the admin page."}
         </p>
-
+            {/* Tabs */}
         <nav className="mt-8 border-b border-gray-700">
           <ul className="flex gap-8">
             <li>
@@ -137,7 +165,7 @@ export default function AdminPage() {
         </nav>
 
         <div className="mt-8" />
-
+{/* Student roster (table-like) */}
         <section>
           <h2 className="mb-4 text-sm uppercase text-gray-400">
             Student Roster
@@ -151,7 +179,7 @@ export default function AdminPage() {
               <div className="col-span-3 font-semibold">Email</div>
               <div className="col-span-1 text-right font-semibold">Certs</div>
             </div>
-
+{/* Example rows - replace with live data later */}
             <div className="divide-y divide-gray-800">
               {[
                 {
@@ -206,8 +234,9 @@ export default function AdminPage() {
             </div>
           </div>
         </section>
-
+{/* Two-column forms */}
         <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2">
+{/* Left: Add New Student */}
           <div className="rounded border border-gray-800 bg-[#0c0c0c] p-6">
             <h3 className="mb-4 text-sm uppercase text-gray-400">
               Add New Student
@@ -221,7 +250,7 @@ export default function AdminPage() {
               className="mb-4 w-full rounded bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500 border border-gray-800"
               placeholder="Jane Smith"
             />
-
+{/* Right: Link NSHE ID -> RebelCard */}
             <label htmlFor="nsheId" className="mb-2 block text-xs text-gray-400">
               NSHE ID
             </label>
@@ -295,7 +324,7 @@ export default function AdminPage() {
           </div>
         </div>
       </main>
-
+{/* Floating help button */}
       <div className="fixed right-6 bottom-6">
         <button className="flex h-10 w-10 items-center justify-center rounded-full bg-[#111111] border border-gray-700 text-gray-300">
           ?

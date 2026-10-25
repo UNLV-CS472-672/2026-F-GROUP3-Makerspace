@@ -1,0 +1,176 @@
+import json
+import requests
+import csv
+import sys
+
+import os
+
+# Read the GitHub token from the environment instead of hardcoding it.
+# Set it in your terminal before running, e.g.  export GITHUB_TOKEN=your_token_here
+# Never put a real token in this file or commit it to GitHub.
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "").strip()
+
+# Seconds to wait for GitHub before giving up on one request
+REQUEST_TIMEOUT = 30
+
+# Largest page size GitHub accepts for a commit's list of changed files
+FILES_PER_PAGE = 100
+
+# GitHub documents a limit of 3000 changed files per commit, counted across all of its pages
+MAX_FILES_PER_COMMIT = 3000
+
+
+# Raised when a GitHub API request fails, so main() can report it and stop
+class GitHubError(Exception):
+    pass
+
+
+# Raises GitHubError if GITHUB_TOKEN is missing or blank, before any request is made
+def require_token():
+    if not GITHUB_TOKEN.strip():
+        raise GitHubError('set the GITHUB_TOKEN environment variable before running')
+
+
+# GitHub Authentication function
+# Sends one GET request to the GitHub API and returns the parsed JSON and the URL of the next page (None on the last page).
+# Raises GitHubError if the request times out, cannot connect, returns an error status, or returns invalid JSON.
+def github_request(url):
+    # The token goes in the Authorization header so GitHub knows who is asking
+    headers = {'Authorization': 'Bearer {}'.format(GITHUB_TOKEN)}
+    try:
+        response = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
+    except requests.Timeout:
+        raise GitHubError('Request timed out after {} seconds: {}'.format(REQUEST_TIMEOUT, url))
+    except requests.ConnectionError:
+        raise GitHubError('Could not connect to GitHub: {}'.format(url))
+
+    # GitHub reports rate limits as 403 or 429 with X-RateLimit-Remaining set to 0
+    if response.status_code in (403, 429) and response.headers.get('X-RateLimit-Remaining') == '0':
+        reset = response.headers.get('X-RateLimit-Reset', 'unknown')
+        raise GitHubError('GitHub API rate limit reached. Resets at Unix time {}.'.format(reset))
+    if response.status_code == 401:
+        raise GitHubError('GitHub rejected the token (HTTP 401). Check that GITHUB_TOKEN is valid.')
+    if not 200 <= response.status_code < 300:
+        raise GitHubError('GitHub returned HTTP {} for {}'.format(response.status_code, url))
+
+    try:
+        # response.content holds the raw response body; json.loads turns it into Python lists/dicts
+        data = json.loads(response.content)
+    except ValueError:
+        raise GitHubError('GitHub returned invalid JSON for {}'.format(url))
+    # requests parses the Link header; GitHub sends rel="next" when more pages exist
+    next_url = response.links.get('next', {}).get('url')
+    return data, next_url
+
+
+# Returns only the parsed JSON for one GitHub API request
+def github_auth(url):
+    data, _ = github_request(url)
+    return data
+
+
+# @sha_url, the commit API URL for one commit
+# Returns the unique file paths that commit touched, in the order GitHub listed them.
+# Follows every files page. Raises GitHubError if the cap is reached, since the list may be incomplete and completeness cannot be established.
+def commit_files(sha_url):
+    paths = {}  # a dict keeps first-seen order and drops duplicate paths
+    entries = 0  # file entries returned by GitHub, counted toward the cap separately from unique paths
+    url = sha_url + '?per_page=' + str(FILES_PER_PAGE)
+    while url:
+        shaDetails, url = github_request(url)
+        filesjson = shaDetails['files']
+        entries += len(filesjson)
+        paths.update(dict.fromkeys(filenameObj['filename'] for filenameObj in filesjson))
+        if entries >= MAX_FILES_PER_COMMIT:
+            raise GitHubError('{} files reached GitHub\'s limit of {} for {}; the complete file list cannot be established'.format(
+                entries, MAX_FILES_PER_COMMIT, sha_url))
+    return list(paths)
+
+# @dictFiles, empty dictionary of files (filename -> number of commits that touched it)
+# @repo, GitHub repo, in the form 'owner/name'
+# Raises GitHubError if any request fails; dictfiles may then hold partial counts
+def countfiles(dictfiles, repo):
+    ipage = 1  # url page counter
+
+    # loop though all the commit pages until the last returned empty page
+    while True:
+        spage = str(ipage)
+        commitsUrl = 'https://api.github.com/repos/' + repo + '/commits?page=' + spage + '&per_page=100'
+        jsonCommits = github_auth(commitsUrl)
+
+        # break out of the while loop if there are no more commits in the pages
+        if len(jsonCommits) == 0:
+            break
+        # iterate through the list of commits in  spage
+        for shaObject in jsonCommits:
+            # Each commit has a unique id called a sha
+            sha = shaObject['sha']
+            # For each commit, use the GitHub commit API to extract the files touched by the commit
+            shaUrl = 'https://api.github.com/repos/' + repo + '/commits/' + sha
+            # Add 1 to the count for each unique file this commit touched
+            for filename in commit_files(shaUrl):
+                dictfiles[filename] = dictfiles.get(filename, 0) + 1
+                print(filename)
+        ipage += 1
+
+# GitHub repo
+# To analyze a different project, change this line to 'owner/name' (the part after github.com/)
+# Only one repo line should be active at a time
+repo = 'scottyab/rootbeer'
+# repo = 'Skyscanner/backpack' # This repo is commit heavy. It takes long to finish executing
+# repo = 'k9mail/k-9' # This repo is commit heavy. It takes long to finish executing
+# repo = 'mendhak/gpslogger'
+
+
+def main():
+    # Stop before doing any work if no token was given
+    try:
+        require_token()
+    except GitHubError as e:
+        sys.stderr.write("Error: {}.\n".format(e))
+        sys.exit(1)
+
+    # Collect the file counts; dictfiles is filled in by countfiles
+    dictfiles = dict()
+    try:
+        countfiles(dictfiles, repo)
+    except GitHubError as e:
+        # Exit before the CSV is opened, so a failed run never replaces an existing file with partial results
+        sys.stderr.write("Error: {}. No CSV was written.\n".format(e))
+        sys.exit(1)
+    print('Total number of files: ' + str(len(dictfiles)))
+
+    # Create the data/ folder for the CSV output if it does not exist yet
+    if not os.path.exists("data"):
+        os.makedirs("data")
+
+    # Build the output file name from the repo name, e.g. 'rootbeer' -> data/file_rootbeer.csv
+    file = repo.split('/')[1]
+    # change this to the path of your file
+    fileOutput = 'data/file_' + file + '.csv'
+    rows = ["Filename", "Touches"]
+    fileCSV = open(fileOutput, 'w')
+    writer = csv.writer(fileCSV)
+    # Write the header row first
+    writer.writerow(rows)
+
+    # Track the file with the highest count while writing one row per file
+    bigcount = None
+    bigfilename = None
+    for filename, count in dictfiles.items():
+        rows = [filename, count]
+        writer.writerow(rows)
+        if bigcount is None or count > bigcount:
+            bigcount = count
+            bigfilename = filename
+    fileCSV.close()
+    # bigfilename stays None when the repo has no files, so report that instead of crashing
+    if bigfilename is None:
+        print('No files were found for ' + repo)
+    else:
+        print('The file ' + bigfilename + ' has been touched ' + str(bigcount) + ' times.')
+
+
+# Run main() only when this file is executed directly, not when a test imports it
+if __name__ == "__main__":
+    main()

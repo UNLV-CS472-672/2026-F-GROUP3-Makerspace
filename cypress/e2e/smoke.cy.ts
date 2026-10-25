@@ -78,4 +78,27 @@ describe("smoke tests", () => {
       cy.findByRole("heading", { name: /rebelcard check-in/i });
     });
   });
+
+  describe("Admin route", () => {
+    afterEach(() => {
+      cy.cleanupUser();
+    });
+
+    it("allows an admin user to access the admin console", () => {
+      cy.loginAsAdmin({ email: "admin@unlv.nevada.edu" });
+      cy.visit("/admin");
+      cy.contains("MAKERSPACE ADMIN CONSOLE").should("be.visible");
+    });
+  
+    it("redirects a non-authenticated user away from the admin console", () => {
+      cy.visit("/admin");
+      cy.location("pathname").should("include", "/login");
+    });
+  
+    it("blocks a non-admin user from the admin console", () => {
+      cy.login({ email: "student@example.com" });
+      cy.visit("/admin");
+      cy.location("pathname").should("include", "/login");
+    });
+  });
 });

@@ -17,6 +17,18 @@ declare global {
       login: typeof login;
 
       /**
+       * Logs in as a mock admin user. Used for admin-route E2E tests.
+       *
+       * @returns {typeof loginAsAdmin}
+       * @memberof Chainable
+       * @example
+       *    cy.loginAsAdmin()
+       * @example
+       *    cy.loginAsAdmin({ email: 'admin@unlv.nevada.edu' })
+       */
+      loginAsAdmin: typeof loginAsAdmin;
+
+      /**
        * Deletes the current @user
        *
        * @returns {typeof cleanupUser}
@@ -60,6 +72,23 @@ function login({
   return cy.get("@user");
 }
 
+function loginAsAdmin({
+  email = "admin@unlv.nevada.edu",
+}: {
+  email?: string;
+} = {}) {
+  cy.then(() => ({ email })).as("user");
+  cy.exec(`npx tsx ./cypress/support/create-user.ts "${email}" admin`).then(
+    ({ stdout }) => {
+      const cookieValue = stdout
+        .replace(/.*<cookie>(?<cookieValue>.*)<\/cookie>.*/s, "$<cookieValue>")
+        .trim();
+      cy.setCookie("__session", cookieValue);
+    },
+  );
+  return cy.get("@user");
+}
+
 function cleanupUser({ email }: { email?: string } = {}) {
   if (email) {
     deleteUserByEmail(email);
@@ -83,7 +112,6 @@ function deleteUserByEmail(email: string) {
 // https://github.com/cypress-io/cypress/issues/7306
 // Also added custom types to avoid getting detached
 // https://github.com/cypress-io/cypress/issues/7306#issuecomment-1152752612
-// ===========================================================
 function visitAndCheck(url: string, waitTime = 1000) {
   cy.visit(url);
   cy.location("pathname").should("contain", url).wait(waitTime);
@@ -91,6 +119,7 @@ function visitAndCheck(url: string, waitTime = 1000) {
 
 export const registerCommands = () => {
   Cypress.Commands.add("login", login);
+  Cypress.Commands.add("loginAsAdmin", loginAsAdmin);
   Cypress.Commands.add("cleanupUser", cleanupUser);
   Cypress.Commands.add("visitAndCheck", visitAndCheck);
 };
