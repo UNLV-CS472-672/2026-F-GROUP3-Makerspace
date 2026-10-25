@@ -1,28 +1,19 @@
-import type { LoaderFunctionArgs } from "@remix-run/node";
-import { redirect } from "@remix-run/node";
+import { redirect, type LoaderFunctionArgs } from "@remix-run/node";
 import { Link, useLoaderData } from "@remix-run/react";
 import { useState } from "react";
 
 import { getUser } from "~/session.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  // Protect the admin route:
-  // 1) If the user is not authenticated -> redirect to login page (with redirectTo).
-  // 2) If authenticated but not an admin -> throw 403.
-  // 3) Otherwise return necessary data for the admin UI.
-
   const url = new URL(request.url);
 
   const user = await getUser(request);
 
   if (!user) {
-    // Redirect to login and preserve where they wanted to go.
     const redirectTo = url.pathname + url.search;
     return redirect(`/login?redirectTo=${encodeURIComponent(redirectTo)}`);
   }
 
-  // In this repo, roles is a string on the User model, e.g. "staff" or "admin".
-  // Normalize it into an array before checking access.
   const roles = (user.roles ?? "")
     .split(",")
     .map((role) => role.trim().toLowerCase())
@@ -31,11 +22,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const isAdmin = roles.includes("admin");
 
   if (!isAdmin) {
-    // Throw a 403 that will display a denial message.
     throw new Response("Forbidden", { status: 403 });
   }
 
-  // At this stage the user is authenticated and authorized.
   return {
     success: true,
     user: {
@@ -52,13 +41,17 @@ export default function AdminPage() {
     "users",
   );
 
+  const renderTabUnderline = (tab: "users" | "machines" | "certs") => {
+    return activeTab === tab ? (
+      <span className="absolute left-0 -bottom-4 h-1 w-full rounded bg-[#c00000]" />
+    ) : null;
+  };
+
   return (
     <div className="min-h-screen bg-[#0f0f0f] text-white">
-      {/* Top header */}
       <header className="h-20 bg-[#c00000]">
         <div className="mx-auto flex h-full max-w-6xl items-center justify-between px-6">
           <div className="flex items-center gap-4">
-            {/* Circular UNLV mark */}
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-[#c00000] font-bold">
               UNLV
             </div>
@@ -82,7 +75,6 @@ export default function AdminPage() {
         </div>
       </header>
 
-      {/* Main content */}
       <main className="mx-auto max-w-6xl px-6 py-8">
         <h1 className="text-xl font-bold">Admin Dashboard</h1>
 
@@ -92,7 +84,6 @@ export default function AdminPage() {
             : "Unable to load the admin page."}
         </p>
 
-        {/* Tabs */}
         <nav className="mt-8 border-b border-gray-700">
           <ul className="flex gap-8">
             <li>
@@ -106,9 +97,7 @@ export default function AdminPage() {
               >
                 <span className="relative">
                   USERS
-                  {activeTab === "users" && (
-                    <span className="absolute left-0 -bottom-4 h-1 w-full rounded bg-[#c00000]" />
-                  )}
+                  {renderTabUnderline("users")}
                 </span>
               </button>
             </li>
@@ -124,9 +113,7 @@ export default function AdminPage() {
               >
                 <span className="relative">
                   MACHINES
-                  {activeTab === "machines" && (
-                    <span className="absolute left-0 -bottom-4 h-1 w-full rounded bg-[#c00000]" />
-                  )}
+                  {renderTabUnderline("machines")}
                 </span>
               </button>
             </li>
@@ -142,19 +129,15 @@ export default function AdminPage() {
               >
                 <span className="relative">
                   CERTIFICATIONS
-                  {activeTab === "certs" && (
-                    <span className="absolute left-0 -bottom-4 h-1 w-full rounded bg-[#c00000]" />
-                  )}
+                  {renderTabUnderline("certs")}
                 </span>
               </button>
             </li>
           </ul>
         </nav>
 
-        {/* Spacing after tabs */}
         <div className="mt-8" />
 
-        {/* Student roster (table-like) */}
         <section>
           <h2 className="mb-4 text-sm uppercase text-gray-400">
             Student Roster
@@ -170,7 +153,6 @@ export default function AdminPage() {
             </div>
 
             <div className="divide-y divide-gray-800">
-              {/* Example rows - replace with live data later */}
               {[
                 {
                   name: "Maria Sanchez",
@@ -225,9 +207,7 @@ export default function AdminPage() {
           </div>
         </section>
 
-        {/* Two-column forms */}
         <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2">
-          {/* Left: Add New Student */}
           <div className="rounded border border-gray-800 bg-[#0c0c0c] p-6">
             <h3 className="mb-4 text-sm uppercase text-gray-400">
               Add New Student
@@ -280,7 +260,6 @@ export default function AdminPage() {
             </button>
           </div>
 
-          {/* Right: Link NSHE ID -> RebelCard */}
           <div className="rounded border border-gray-800 bg-[#0c0c0c] p-6">
             <h3 className="mb-4 text-sm uppercase text-gray-400">
               Link NSHE ID → RebelCard
@@ -317,7 +296,6 @@ export default function AdminPage() {
         </div>
       </main>
 
-      {/* Floating help button */}
       <div className="fixed right-6 bottom-6">
         <button className="flex h-10 w-10 items-center justify-center rounded-full bg-[#111111] border border-gray-700 text-gray-300">
           ?
