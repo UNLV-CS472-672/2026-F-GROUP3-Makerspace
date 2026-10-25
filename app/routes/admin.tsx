@@ -1,30 +1,18 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { redirect } from "@remix-run/node";
-import { Link, useLoaderData, useCatch } from "@remix-run/react";
+import { Link, useLoaderData } from "@remix-run/react";
 import { useState } from "react";
 
-/**
- * IMPORTANT:
- * - Replace `getUser` with your project's session/auth helper.
- *   Example implementations:
- *     - export async function getUser(request: Request) { ... }
- *     - export async function requireUser(request: Request) { ... }
- *
- * - The code below assumes `getUser(request)` returns either `null` (not authenticated)
- *   or a user object { id, email, name, isAdmin?, roles?: string[] }.
- */
-import { getUser } from "~/utils/session.server";
+import { getUser } from "~/session.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   // Protect the admin route:
   // 1) If the user is not authenticated -> redirect to login page (with redirectTo).
-  // 2) If authenticated but not an admin -> throw 403 (caught by CatchBoundary).
+  // 2) If authenticated but not an admin -> throw 403.
   // 3) Otherwise return necessary data for the admin UI.
 
   const url = new URL(request.url);
 
-  // getUser/requireAdmin/etc should be implemented in your app; adapt to 
-  // actual function name and return shape. 
   const user = await getUser(request);
 
   if (!user) {
@@ -33,14 +21,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return redirect(`/login?redirectTo=${encodeURIComponent(redirectTo)}`);
   }
 
-  // Adjust this check to match user object (isAdmin, roles array, etc.)
-  const isAdmin =
-    (user as any).isAdmin === true ||
-    Array.isArray((user as any).roles) &&
-      (user as any).roles.includes("admin");
+  // In this repo, roles is a string on the User model, e.g. "staff" or "admin".
+  // Normalize it into an array before checking access.
+  const roles = (user.roles ?? "")
+    .split(",")
+    .map((role) => role.trim().toLowerCase())
+    .filter(Boolean);
+
+  const isAdmin = roles.includes("admin");
 
   if (!isAdmin) {
-    // Throw a 403 that the route's CatchBoundary will render nicely.
+    // Throw a 403 that will display a denial message.
     throw new Response("Forbidden", { status: 403 });
   }
 
@@ -48,9 +39,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return {
     success: true,
     user: {
-      id: (user as any).id,
-      name: (user as any).name,
-      email: (user as any).email,
+      id: user.id,
+      email: user.email,
+      roles: roles.join(", "),
     },
   };
 }
@@ -58,7 +49,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export default function AdminPage() {
   const loaderData = useLoaderData<typeof loader>();
   const [activeTab, setActiveTab] = useState<"users" | "machines" | "certs">(
-    "users"
+    "users",
   );
 
   return (
@@ -202,9 +193,9 @@ export default function AdminPage() {
                   email: "t.kim@unlv.nevada.edu",
                   certs: 0,
                 },
-              ].map((row, i) => (
+              ].map((row, index) => (
                 <div
-                  key={i}
+                  key={`${row.email}-${index}`}
                   className="grid grid-cols-12 gap-4 px-6 py-4 items-center text-sm"
                 >
                   <div className="col-span-4">
@@ -242,26 +233,44 @@ export default function AdminPage() {
               Add New Student
             </h3>
 
-            <label className="mb-2 block text-xs text-gray-400">Full name</label>
+            <label htmlFor="fullName" className="mb-2 block text-xs text-gray-400">
+              Full name
+            </label>
             <input
+              id="fullName"
               className="mb-4 w-full rounded bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500 border border-gray-800"
               placeholder="Jane Smith"
             />
 
-            <label className="mb-2 block text-xs text-gray-400">NSHE ID</label>
+            <label htmlFor="nsheId" className="mb-2 block text-xs text-gray-400">
+              NSHE ID
+            </label>
             <input
+              id="nsheId"
               className="mb-4 w-full rounded bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500 border border-gray-800"
               placeholder="2001234567"
             />
 
-            <label className="mb-2 block text-xs text-gray-400">RebelCard ID</label>
+            <label
+              htmlFor="rebelCardId"
+              className="mb-2 block text-xs text-gray-400"
+            >
+              RebelCard ID
+            </label>
             <input
+              id="rebelCardId"
               className="mb-4 w-full rounded bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500 border border-gray-800"
               placeholder="1001234567"
             />
 
-            <label className="mb-2 block text-xs text-gray-400">Email</label>
+            <label
+              htmlFor="studentEmail"
+              className="mb-2 block text-xs text-gray-400"
+            >
+              Email
+            </label>
             <input
+              id="studentEmail"
               className="mb-6 w-full rounded bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500 border border-gray-800"
               placeholder="j.smith@unlv.nevada.edu"
             />
@@ -277,16 +286,26 @@ export default function AdminPage() {
               Link NSHE ID → RebelCard
             </h3>
 
-            <label className="mb-2 block text-xs text-gray-400">NSHE ID</label>
+            <label
+              htmlFor="linkNsheId"
+              className="mb-2 block text-xs text-gray-400"
+            >
+              NSHE ID
+            </label>
             <input
+              id="linkNsheId"
               className="mb-4 w-full rounded bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500 border border-gray-800"
               placeholder="2001234567"
             />
 
-            <label className="mb-2 block text-xs text-gray-400">
+            <label
+              htmlFor="newRebelCardId"
+              className="mb-2 block text-xs text-gray-400"
+            >
               New RebelCard ID
             </label>
             <input
+              id="newRebelCardId"
               className="mb-6 w-full rounded bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500 border border-gray-800"
               placeholder="1001234567"
             />
@@ -303,70 +322,6 @@ export default function AdminPage() {
         <button className="flex h-10 w-10 items-center justify-center rounded-full bg-[#111111] border border-gray-700 text-gray-300">
           ?
         </button>
-      </div>
-    </div>
-  );
-}
-
-/**
- * User-friendly 403 UI when an authenticated non-admin reaches this route.
- * Remix catches thrown Responses and passes them to useCatch() here.
- */
-export function CatchBoundary() {
-  const caught = useCatch();
-
-  if (caught.status === 403) {
-    return (
-      <div className="min-h-screen bg-[#0f0f0f] text-white flex items-center justify-center">
-        <div className="max-w-xl text-center rounded border border-gray-800 bg-[#0c0c0c] p-8">
-          <h1 className="text-2xl font-bold">Access denied</h1>
-          <p className="mt-4 text-gray-400">
-            You do not have permission to view the Makerspace admin console.
-          </p>
-
-          <div className="mt-6 flex justify-center gap-4">
-            <Link
-              to="/"
-              className="rounded bg-[#2b2b2b] px-4 py-2 text-sm font-semibold"
-            >
-              Return to scanner
-            </Link>
-
-            <Link
-              to="/"
-              className="rounded bg-[#c00000] px-4 py-2 text-sm font-semibold"
-            >
-              Contact admin
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-[#0f0f0f] text-white flex items-center justify-center">
-      <div className="max-w-xl text-center">
-        <h1 className="text-2xl font-bold">Something went wrong</h1>
-        <p className="mt-4 text-gray-400">{caught.statusText || "Unknown"}</p>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Error boundary for unexpected runtime errors in this route.
- */
-export function ErrorBoundary({ error }: { error: Error }) {
-  console.error("Admin route error:", error);
-
-  return (
-    <div className="min-h-screen bg-[#0f0f0f] text-white flex items-center justify-center">
-      <div className="max-w-xl text-center">
-        <h1 className="text-2xl font-bold">Unexpected error</h1>
-        <p className="mt-4 text-gray-400">
-          An unexpected error occurred while loading the admin console.
-        </p>
       </div>
     </div>
   );
