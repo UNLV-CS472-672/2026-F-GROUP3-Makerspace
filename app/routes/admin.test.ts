@@ -16,7 +16,7 @@ interface MockUser {
 const makeUser = (overrides: Partial<MockUser> = {}): MockUser => ({
   id: "user-1",
   email: "test@example.com",
-  roles: "staff",
+  roles: "",
   createdAt: new Date(),
   updatedAt: new Date(),
   ...overrides,

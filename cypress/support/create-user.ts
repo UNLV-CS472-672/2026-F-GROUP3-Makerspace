@@ -10,7 +10,6 @@ import bcrypt from "bcryptjs";
 import { parse } from "cookie";
 
 import { prisma } from "~/db.server";
-
 import { createUserSession } from "~/session.server";
 
 installGlobals();
@@ -29,11 +28,11 @@ async function createAndLogin(email: string, role = "") {
   const user = await prisma.user.upsert({
     where: { email },
     update: {
-      ...(role ? { roles: role } : {}),
+    roles: role,
     },
     create: {
       email,
-      ...(role ? { roles: role } : {}),
+      roles: role,
       password: {
         create: {
           hash: await bcrypt.hash(password, 10),
