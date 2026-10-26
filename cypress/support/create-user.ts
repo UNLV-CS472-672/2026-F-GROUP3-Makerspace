@@ -19,8 +19,8 @@ async function createAndLogin(email: string, role = "") {
     throw new Error("email required for login");
   }
 
-  if (!email.endsWith("@example.com") && !email.endsWith("@unlv.nevada.edu")) {
-    throw new Error("All test emails must end in @example.com or @unlv.nevada.edu");
+  if (!email.endsWith("@example.com")) {
+    throw new Error("All test emails must end in @example.com");
   }
 
   const password = "myreallystrongpassword";
@@ -28,7 +28,7 @@ async function createAndLogin(email: string, role = "") {
   const user = await prisma.user.upsert({
     where: { email },
     update: {
-    roles: role,
+      roles: role,
     },
     create: {
       email,

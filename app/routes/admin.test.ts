@@ -38,9 +38,7 @@ describe("admin loader", () => {
 
     if (result instanceof Response) {
       expect(result.status).toBe(302);
-      expect(result.headers.get("Location")).toBe(
-        "/login?redirectTo=%2Fadmin",
-      );
+      expect(result.headers.get("Location")).toBe("/login?redirectTo=%2Fadmin");
     }
   });
 
@@ -58,7 +56,9 @@ describe("admin loader", () => {
 
     await expect(
       loader({ request } as LoaderFunctionArgs),
-    ).rejects.toThrow("Forbidden");
+    ).rejects.toMatchObject({
+      status: 403,
+    });
   });
 
   it("allows staff users to view the admin page", async () => {
@@ -156,6 +156,8 @@ describe("admin loader", () => {
 
     await expect(
       loader({ request } as LoaderFunctionArgs),
-    ).rejects.toThrow("Forbidden");
+    ).rejects.toMatchObject({
+      status: 403,
+    });
   });
 });

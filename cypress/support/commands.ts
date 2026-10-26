@@ -25,7 +25,7 @@ declare global {
        * @example
        *    cy.loginAsAdmin()
        * @example
-       *    cy.loginAsAdmin({ email: 'admin@unlv.nevada.edu' })
+       *    cy.loginAsAdmin({ email: 'cypress-admin@example.com' })
        */
       loginAsAdmin: typeof loginAsAdmin;
 
@@ -77,7 +77,7 @@ function login({
 }
 
 function loginAsAdmin({
-  email = "admin@unlv.nevada.edu",
+  email = "cypress-admin@example.com",
 }: {
   email?: string;
 } = {}) {
@@ -103,10 +103,19 @@ function cleanupUser({ email }: { email?: string } = {}) {
     return;
   }
 
+  interface AliasState {
+    user?: {
+      email?: string;
+    };
+  };
+
+  const cypressStateApi = Cypress as unknown as {
+    state: (key: string) => AliasState | undefined;
+  };
+
   cy.then(() => {
     try {
-      const aliasState = (Cypress as any).state("aliases");
-      return aliasState?.user;
+      return cypressStateApi.state("aliases")?.user;
     } catch {
       return undefined;
     }

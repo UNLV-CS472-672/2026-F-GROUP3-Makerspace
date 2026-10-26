@@ -67,8 +67,8 @@ jobs:
     name: ⚡ Vitest
     runs-on: ubuntu-latest
     env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+      SESSION_SECRET: ci-only-not-a-secret
     steps:
       - name: ⬇️ Checkout repo
         uses: actions/checkout@v7

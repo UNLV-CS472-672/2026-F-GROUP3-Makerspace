@@ -5,7 +5,7 @@ import { useState } from "react";
 import { getUser } from "~/session.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
-   // Protect the admin route:
+  // Protect the admin route:
   // 1) If the user is not authenticated -> redirect to login page (with redirectTo).
   // 2) If authenticated but not in an allowed role -> throw 403.
   // 3) Otherwise return necessary data for the admin UI.
@@ -47,21 +47,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 /**
- * TODO: 
+ * TODO:
  * - Render the admin dashboard with tabs for Users, Machines,
- *    and Certifications. 
- * - Each tab should display relevant data and 
- *   provide functionality to manage users, machines, and certifications. 
- * - Implement forms for adding new students and linking NSHE IDs to 
- *    RebelCard IDs. 
- * - Ensure proper styling and responsive design for the 
+ *    and Certifications.
+ * - Each tab should display relevant data and
+ *   provide functionality to manage users, machines, and certifications.
+ * - Implement forms for adding new students and linking NSHE IDs to
+ *    RebelCard IDs.
+ * - Ensure proper styling and responsive design for the
  *    admin console.
- * 
- * AI Usage: Github Copilot was used to assist in writing the code for the admin 
- *           dashboard UI elements such as buttons, tabs, and forms. It provided 
- *           suggestions for JSX structure and Tailwind CSS classes to achieve the 
+ *
+ * AI Usage: Github Copilot was used to assist in writing the code for the admin
+ *           dashboard UI elements such as buttons, tabs, and forms. It provided
+ *           suggestions for JSX structure and Tailwind CSS classes to achieve the
  *           desired layout and styling.
- * 
+ *
  */
 export default function AdminPage() {
   const loaderData = useLoaderData<typeof loader>();
@@ -71,7 +71,7 @@ export default function AdminPage() {
 
   const renderTabUnderline = (tab: "users" | "machines" | "certs") => {
     return activeTab === tab ? (
-      <span className="absolute left-0 -bottom-4 h-1 w-full rounded bg-[#c00000]" />
+      <span className="absolute -bottom-4 left-0 h-1 w-full rounded bg-[#c00000]" />
     ) : null;
   };
 
@@ -82,7 +82,7 @@ export default function AdminPage() {
         <div className="mx-auto flex h-full max-w-6xl items-center justify-between px-6">
           <div className="flex items-center gap-4">
             {/* Circular UNLV mark */}
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-[#c00000] font-bold">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white font-bold text-[#c00000]">
               UNLV
             </div>
             <div>
@@ -113,7 +113,7 @@ export default function AdminPage() {
             ? `Admin page is ready for development. Signed in as ${loaderData.user?.email ?? "admin"}`
             : "Unable to load the admin page."}
         </p>
-            {/* Tabs */}
+        {/* Tabs */}
         <nav className="mt-8 border-b border-gray-700">
           <ul className="flex gap-8">
             <li>
@@ -167,21 +167,21 @@ export default function AdminPage() {
         </nav>
 
         <div className="mt-8" />
-{/* Student roster (table-like) */}
+        {/* Student roster (table-like) */}
         <section>
           <h2 className="mb-4 text-sm uppercase text-gray-400">
             Student Roster
           </h2>
 
           <div className="overflow-hidden rounded border border-gray-800 bg-[#0c0c0c]">
-            <div className="grid grid-cols-12 gap-4 px-6 py-3 text-xs text-gray-400 uppercase">
+            <div className="grid grid-cols-12 gap-4 px-6 py-3 text-xs uppercase text-gray-400">
               <div className="col-span-4 font-semibold">Name</div>
               <div className="col-span-2 font-semibold">NSHE ID</div>
               <div className="col-span-2 font-semibold">RebelCard ID</div>
               <div className="col-span-3 font-semibold">Email</div>
               <div className="col-span-1 text-right font-semibold">Certs</div>
             </div>
-{/* Example rows - replace with live data later */}
+            {/* Example rows - replace with live data later */}
             <div className="divide-y divide-gray-800">
               {[
                 {
@@ -208,7 +208,7 @@ export default function AdminPage() {
               ].map((row, index) => (
                 <div
                   key={`${row.email}-${index}`}
-                  className="grid grid-cols-12 gap-4 px-6 py-4 items-center text-sm"
+                  className="grid grid-cols-12 items-center gap-4 px-6 py-4 text-sm"
                 >
                   <div className="col-span-4">
                     <div className="font-medium text-white">{row.name}</div>
@@ -224,7 +224,7 @@ export default function AdminPage() {
                     <span
                       className={`inline-block rounded px-2 py-1 text-xs font-semibold ${
                         row.certs > 0
-                          ? "bg-[#2b0000] text-[#ffb6b6] border border-[#5a0000]"
+                          ? "border border-[#5a0000] bg-[#2b0000] text-[#ffb6b6]"
                           : "bg-gray-800 text-gray-400"
                       }`}
                     >
@@ -236,29 +236,35 @@ export default function AdminPage() {
             </div>
           </div>
         </section>
-{/* Two-column forms */}
+        {/* Two-column forms */}
         <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2">
-{/* Left: Add New Student */}
+          {/* Left: Add New Student */}
           <div className="rounded border border-gray-800 bg-[#0c0c0c] p-6">
             <h3 className="mb-4 text-sm uppercase text-gray-400">
               Add New Student
             </h3>
 
-            <label htmlFor="fullName" className="mb-2 block text-xs text-gray-400">
+            <label
+              htmlFor="fullName"
+              className="mb-2 block text-xs text-gray-400"
+            >
               Full name
             </label>
             <input
               id="fullName"
-              className="mb-4 w-full rounded bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500 border border-gray-800"
+              className="mb-4 w-full rounded border border-gray-800 bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500"
               placeholder="Jane Smith"
             />
-{/* Right: Link NSHE ID -> RebelCard */}
-            <label htmlFor="nsheId" className="mb-2 block text-xs text-gray-400">
+            {/* Right: Link NSHE ID -> RebelCard */}
+            <label
+              htmlFor="nsheId"
+              className="mb-2 block text-xs text-gray-400"
+            >
               NSHE ID
             </label>
             <input
               id="nsheId"
-              className="mb-4 w-full rounded bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500 border border-gray-800"
+              className="mb-4 w-full rounded border border-gray-800 bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500"
               placeholder="2001234567"
             />
 
@@ -270,7 +276,7 @@ export default function AdminPage() {
             </label>
             <input
               id="rebelCardId"
-              className="mb-4 w-full rounded bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500 border border-gray-800"
+              className="mb-4 w-full rounded border border-gray-800 bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500"
               placeholder="1001234567"
             />
 
@@ -282,7 +288,7 @@ export default function AdminPage() {
             </label>
             <input
               id="studentEmail"
-              className="mb-6 w-full rounded bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500 border border-gray-800"
+              className="mb-6 w-full rounded border border-gray-800 bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500"
               placeholder="j.smith@unlv.nevada.edu"
             />
 
@@ -304,7 +310,7 @@ export default function AdminPage() {
             </label>
             <input
               id="linkNsheId"
-              className="mb-4 w-full rounded bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500 border border-gray-800"
+              className="mb-4 w-full rounded border border-gray-800 bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500"
               placeholder="2001234567"
             />
 
@@ -316,7 +322,7 @@ export default function AdminPage() {
             </label>
             <input
               id="newRebelCardId"
-              className="mb-6 w-full rounded bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500 border border-gray-800"
+              className="mb-6 w-full rounded border border-gray-800 bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500"
               placeholder="1001234567"
             />
 
@@ -326,9 +332,9 @@ export default function AdminPage() {
           </div>
         </div>
       </main>
-{/* Floating help button */}
-      <div className="fixed right-6 bottom-6">
-        <button className="flex h-10 w-10 items-center justify-center rounded-full bg-[#111111] border border-gray-700 text-gray-300">
+      {/* Floating help button */}
+      <div className="fixed bottom-6 right-6">
+        <button className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-700 bg-[#111111] text-gray-300">
           ?
         </button>
       </div>

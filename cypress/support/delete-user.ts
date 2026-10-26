@@ -15,10 +15,7 @@ async function deleteUser(email: string) {
     throw new Error("email required for login");
   }
 
-  if (
-    !email.endsWith("@example.com") &&
-    !email.endsWith("@unlv.nevada.edu")
-  ) {
+  if (!email.endsWith("@example.com")) {
     throw new Error(
       "All test emails must end in @example.com or @unlv.nevada.edu",
     );
