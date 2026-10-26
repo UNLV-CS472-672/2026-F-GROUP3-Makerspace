@@ -63,6 +63,40 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const formData = await request.formData();
+    if (formData.get("intent") === "link") {
+    const nsheId = String(formData.get("linkNsheId") ?? "").trim();
+    const newRebelCardId = String(formData.get("newRebelCardId") ?? "").trim();
+
+    const linkErrors: Record<string, string> = {};
+    if (!/^\d{10}$/.test(nsheId))
+      linkErrors.linkNsheId = "NSHE ID must be 10 digits";
+    if (!/^\d{10}$/.test(newRebelCardId))
+      linkErrors.newRebelCardId = "RebelCard ID must be 10 digits";
+    if (Object.keys(linkErrors).length > 0) {
+      return json({ errors: linkErrors }, { status: 400 });
+    }
+
+    const student = await prisma.student.findUnique({ where: { nsheId } });
+    if (!student) {
+      linkErrors.linkNsheId = "No student has this NSHE ID";
+      return json({ errors: linkErrors }, { status: 400 });
+    }
+
+    const cardInUse = await prisma.student.findUnique({
+      where: { rebelCardId: newRebelCardId },
+    });
+    if (cardInUse) {
+      linkErrors.newRebelCardId =
+        "This RebelCard ID is already assigned to a student";
+      return json({ errors: linkErrors }, { status: 400 });
+    }
+
+    await prisma.student.update({
+      where: { nsheId },
+      data: { rebelCardId: newRebelCardId },
+    });
+    return redirect("/admin");
+  }
   const name = String(formData.get("fullName") ?? "").trim();
   const nsheId = String(formData.get("nsheId") ?? "").trim();
   const rebelCardId = String(formData.get("rebelCardId") ?? "").trim();
@@ -342,7 +376,13 @@ export default function AdminPage() {
             </button>
           </Form>
 
-          <div className="rounded border border-gray-800 bg-[#0c0c0c] p-6">
+                    {/* Right: Link NSHE ID -> RebelCard */}
+          <Form
+            method="post"
+            className="rounded border border-gray-800 bg-[#0c0c0c] p-6"
+          >
+            <input type="hidden" name="intent" value="link" />
+
             <h3 className="mb-4 text-sm uppercase text-gray-400">
               Link NSHE ID → RebelCard
             </h3>
@@ -355,9 +395,17 @@ export default function AdminPage() {
             </label>
             <input
               id="linkNsheId"
-              className="mb-4 w-full rounded bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500 border border-gray-800"
+              name="linkNsheId"
+              className="w-full rounded border border-gray-800 bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500"
               placeholder="2001234567"
             />
+            {actionData?.errors?.linkNsheId ? (
+              <p className="mb-4 pt-1 text-xs text-red-400">
+                {actionData.errors.linkNsheId}
+              </p>
+            ) : (
+              <div className="mb-4" />
+            )}
 
             <label
               htmlFor="newRebelCardId"
@@ -367,14 +415,25 @@ export default function AdminPage() {
             </label>
             <input
               id="newRebelCardId"
-              className="mb-6 w-full rounded bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500 border border-gray-800"
+              name="newRebelCardId"
+              className="w-full rounded border border-gray-800 bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500"
               placeholder="1001234567"
             />
+            {actionData?.errors?.newRebelCardId ? (
+              <p className="mb-6 pt-1 text-xs text-red-400">
+                {actionData.errors.newRebelCardId}
+              </p>
+            ) : (
+              <div className="mb-6" />
+            )}
 
-            <button className="rounded bg-[#c00000] px-5 py-2 text-sm font-semibold transition-opacity hover:opacity-90">
+            <button
+              type="submit"
+              className="rounded bg-[#c00000] px-5 py-2 text-sm font-semibold transition-opacity hover:opacity-90"
+            >
               Link IDs
             </button>
-          </div>
+          </Form>
         </div>
       </main>
 
