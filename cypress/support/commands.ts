@@ -105,7 +105,7 @@ function cleanupUser({ email }: { email?: string } = {}) {
 
   cy.then(() => {
     try {
-      return cy.state("aliases").user;
+      return Cypress.state("aliases").user;
     } catch {
       return undefined;
     }

@@ -96,9 +96,14 @@ describe("smoke tests", () => {
     });
   
     it("blocks a non-admin user from the admin console", () => {
-      cy.login({ email: "student@example.com" });
-      cy.visit("/admin");
-      cy.location("pathname").should("include", "/login");
+      cy.login(); // regular user, no role
+
+      cy.request({
+        url: "/admin",
+        failOnStatusCode: false,
+      }).then((response) => {
+        expect(response.status).to.eq(403);
+      });
     });
   });
 });
