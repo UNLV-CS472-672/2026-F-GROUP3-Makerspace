@@ -1,4 +1,5 @@
 import { faker } from "@faker-js/faker";
+/// <reference types="cypress" />
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -61,6 +62,8 @@ function login({
   email?: string;
 } = {}) {
   cy.then(() => ({ email })).as("user");
+
+  // regular user: no role
   cy.exec(`npx tsx ./cypress/support/create-user.ts "${email}"`).then(
     ({ stdout }) => {
       const cookieValue = stdout
@@ -69,6 +72,7 @@ function login({
       cy.setCookie("__session", cookieValue);
     },
   );
+
   return cy.get("@user");
 }
 
@@ -78,6 +82,8 @@ function loginAsAdmin({
   email?: string;
 } = {}) {
   cy.then(() => ({ email })).as("user");
+
+  // admin user: explicit admin role
   cy.exec(`npx tsx ./cypress/support/create-user.ts "${email}" admin`).then(
     ({ stdout }) => {
       const cookieValue = stdout
@@ -86,6 +92,7 @@ function loginAsAdmin({
       cy.setCookie("__session", cookieValue);
     },
   );
+
   return cy.get("@user");
 }
 

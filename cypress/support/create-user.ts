@@ -6,14 +6,16 @@
 // This creates a session cookie for the new user so Cypress can set it.
 
 import { installGlobals } from "@remix-run/node";
+import bcrypt from "bcryptjs";
 import { parse } from "cookie";
 
 import { prisma } from "~/db.server";
+
 import { createUserSession } from "~/session.server";
 
 installGlobals();
 
-async function createAndLogin(email: string, role = "staff") {
+async function createAndLogin(email: string, role = "") {
   if (!email) {
     throw new Error("email required for login");
   }
@@ -27,16 +29,14 @@ async function createAndLogin(email: string, role = "staff") {
   const user = await prisma.user.upsert({
     where: { email },
     update: {
-      roles: role,
+      ...(role ? { roles: role } : {}),
     },
     create: {
       email,
-      roles: role,
+      ...(role ? { roles: role } : {}),
       password: {
-        create: { // Hash the password
-          hash: await import("bcryptjs").then(({ default: bcrypt }) =>
-            bcrypt.hash(password, 10),
-          ),
+        create: {
+          hash: await bcrypt.hash(password, 10),
         },
       },
     },
@@ -65,4 +65,4 @@ async function createAndLogin(email: string, role = "staff") {
   );
 }
 
-createAndLogin(process.argv[2], process.argv[3] ?? "staff");
+createAndLogin(process.argv[2], process.argv[3] ?? "");

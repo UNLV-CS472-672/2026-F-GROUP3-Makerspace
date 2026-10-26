@@ -2,15 +2,16 @@ import { type LoaderFunctionArgs } from "@remix-run/node";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import * as sessionModule from "~/session.server";
+
 import { loader } from "./admin";
 
-type MockUser = {
+interface MockUser {
   id: string;
   email: string;
   roles: string;
   createdAt: Date;
   updatedAt: Date;
-};
+}
 
 const makeUser = (overrides: Partial<MockUser> = {}): MockUser => ({
   id: "user-1",
