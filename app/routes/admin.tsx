@@ -9,7 +9,6 @@ import { validateEmail } from "~/utils";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
-
   const user = await getUser(request);
 
   if (!user) {
@@ -17,14 +16,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return redirect(`/login?redirectTo=${encodeURIComponent(redirectTo)}`);
   }
 
+  const allowedRoles = new Set(["staff", "admin", "super admin"]);
   const roles = (user.roles ?? "")
     .split(",")
     .map((role) => role.trim().toLowerCase())
     .filter(Boolean);
 
-  const isAdmin = roles.includes("admin");
+  const hasAllowedRole = roles.some((role) => allowedRoles.has(role));
 
-  if (!isAdmin) {
+  if (!hasAllowedRole) {
     throw new Response("Forbidden", { status: 403 });
   }
 
@@ -33,7 +33,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     include: { certifications: true },
   });
 
-  // At this stage the user is authenticated and authorized.
   return {
     success: true,
     user: {
@@ -53,25 +52,36 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  // A form POST skips the loader, so the admin check has to run again here.
   const user = await getUser(request);
+
+  const allowedRoles = new Set(["staff", "admin", "super admin"]);
   const roles = (user?.roles ?? "")
     .split(",")
-    .map((role) => role.trim().toLowerCase());
-  if (!user || !roles.includes("admin")) {
+    .map((role) => role.trim().toLowerCase())
+    .filter(Boolean);
+
+  const hasAllowedRole = roles.some((role) => allowedRoles.has(role));
+
+  if (!user || !hasAllowedRole) {
     throw new Response("Forbidden", { status: 403 });
   }
 
   const formData = await request.formData();
-    if (formData.get("intent") === "link") {
+
+  if (formData.get("intent") === "link") {
     const nsheId = String(formData.get("linkNsheId") ?? "").trim();
     const newRebelCardId = String(formData.get("newRebelCardId") ?? "").trim();
 
     const linkErrors: Record<string, string> = {};
-    if (!/^\d{10}$/.test(nsheId))
+
+    if (!/^\d{10}$/.test(nsheId)) {
       linkErrors.linkNsheId = "NSHE ID must be 10 digits";
-    if (!/^\d{10}$/.test(newRebelCardId))
+    }
+
+    if (!/^\d{10}$/.test(newRebelCardId)) {
       linkErrors.newRebelCardId = "RebelCard ID must be 10 digits";
+    }
+
     if (Object.keys(linkErrors).length > 0) {
       return json({ errors: linkErrors }, { status: 400 });
     }
@@ -85,6 +95,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const cardInUse = await prisma.student.findUnique({
       where: { rebelCardId: newRebelCardId },
     });
+
     if (cardInUse) {
       linkErrors.newRebelCardId =
         "This RebelCard ID is already assigned to a student";
@@ -95,19 +106,24 @@ export async function action({ request }: ActionFunctionArgs) {
       where: { nsheId },
       data: { rebelCardId: newRebelCardId },
     });
+
     return redirect("/admin");
   }
+
   const name = String(formData.get("fullName") ?? "").trim();
   const nsheId = String(formData.get("nsheId") ?? "").trim();
   const rebelCardId = String(formData.get("rebelCardId") ?? "").trim();
   const email = String(formData.get("studentEmail") ?? "").trim();
 
   const errors: Record<string, string> = {};
+
   if (!name) errors.fullName = "Name is required";
   if (!/^\d{10}$/.test(nsheId)) errors.nsheId = "NSHE ID must be 10 digits";
-  if (!/^\d{10}$/.test(rebelCardId))
+  if (!/^\d{10}$/.test(rebelCardId)) {
     errors.rebelCardId = "RebelCard ID must be 10 digits";
+  }
   if (!validateEmail(email)) errors.studentEmail = "Email is invalid";
+
   if (Object.keys(errors).length > 0) {
     return json({ errors }, { status: 400 });
   }
@@ -115,7 +131,8 @@ export async function action({ request }: ActionFunctionArgs) {
   const existing = await prisma.student.findFirst({
     where: { OR: [{ nsheId }, { rebelCardId }, { email }] },
   });
-    if (existing) {
+
+  if (existing) {
     errors.form =
       "A student with this NSHE ID, RebelCard ID, or email already exists";
     return json({ errors }, { status: 400 });
@@ -124,6 +141,7 @@ export async function action({ request }: ActionFunctionArgs) {
   await prisma.student.create({
     data: { name, nsheId, rebelCardId, email },
   });
+
   return redirect("/admin");
 }
 
@@ -246,7 +264,7 @@ export default function AdminPage() {
             </div>
 
             <div className="divide-y divide-gray-800">
-            {loaderData.students.map((row) => (
+              {loaderData.students.map((row) => (
                 <div
                   key={row.id}
                   className="grid grid-cols-12 gap-4 px-6 py-4 items-center text-sm"
@@ -279,7 +297,6 @@ export default function AdminPage() {
         </section>
 
         <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2">
-          {/* Left: Add New Student */}
           <Form
             method="post"
             className="rounded border border-gray-800 bg-[#0c0c0c] p-6"
@@ -376,7 +393,6 @@ export default function AdminPage() {
             </button>
           </Form>
 
-                    {/* Right: Link NSHE ID -> RebelCard */}
           <Form
             method="post"
             className="rounded border border-gray-800 bg-[#0c0c0c] p-6"
@@ -437,8 +453,8 @@ export default function AdminPage() {
         </div>
       </main>
 
-      <div className="fixed right-6 bottom-6">
-        <button className="flex h-10 w-10 items-center justify-center rounded-full bg-[#111111] border border-gray-700 text-gray-300">
+      <div className="fixed bottom-6 right-6">
+        <button className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-700 bg-[#111111] text-gray-300">
           ?
         </button>
       </div>

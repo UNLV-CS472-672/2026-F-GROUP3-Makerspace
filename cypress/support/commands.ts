@@ -1,4 +1,5 @@
 import { faker } from "@faker-js/faker";
+/// <reference types="cypress" />
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -15,6 +16,18 @@ declare global {
        *    cy.login({ email: 'whatever@example.com' })
        */
       login: typeof login;
+
+      /**
+       * Logs in as a mock admin user. Used for admin-route E2E tests.
+       *
+       * @returns {typeof loginAsAdmin}
+       * @memberof Chainable
+       * @example
+       *    cy.loginAsAdmin()
+       * @example
+       *    cy.loginAsAdmin({ email: 'cypress-admin@example.com' })
+       */
+      loginAsAdmin: typeof loginAsAdmin;
 
       /**
        * Deletes the current @user
@@ -49,6 +62,8 @@ function login({
   email?: string;
 } = {}) {
   cy.then(() => ({ email })).as("user");
+
+  // regular user: no role
   cy.exec(`npx tsx ./cypress/support/create-user.ts "${email}"`).then(
     ({ stdout }) => {
       const cookieValue = stdout
@@ -57,21 +72,70 @@ function login({
       cy.setCookie("__session", cookieValue);
     },
   );
+
+  return cy.get("@user");
+}
+
+function loginAsAdmin({
+  email = "cypress-admin@example.com",
+}: {
+  email?: string;
+} = {}) {
+  cy.then(() => ({ email })).as("user");
+
+  // admin user: explicit admin role
+  cy.exec(`npx tsx ./cypress/support/create-user.ts "${email}" admin`).then(
+    ({ stdout }) => {
+      const cookieValue = stdout
+        .replace(/.*<cookie>(?<cookieValue>.*)<\/cookie>.*/s, "$<cookieValue>")
+        .trim();
+      cy.setCookie("__session", cookieValue);
+    },
+  );
+
   return cy.get("@user");
 }
 
 function cleanupUser({ email }: { email?: string } = {}) {
   if (email) {
     deleteUserByEmail(email);
-  } else {
-    cy.get("@user").then((user) => {
-      const email = (user as { email?: string }).email;
-      if (email) {
-        deleteUserByEmail(email);
-      }
-    });
+    cy.clearCookie("__session");
+    return;
   }
-  cy.clearCookie("__session");
+
+  interface AliasState {
+    user?: {
+      email?: string;
+    };
+  };
+
+  const cypressStateApi = Cypress as unknown as {
+    state: (key: string) => AliasState | undefined;
+  };
+
+  cy.then(() => {
+    try {
+      return cypressStateApi.state("aliases")?.user;
+    } catch {
+      return undefined;
+    }
+  }).then((userAlias) => {
+    if (!userAlias) {
+      cy.clearCookie("__session");
+      return;
+    }
+
+    cy.get("@user")
+      .then((user) => {
+        const currentEmail = (user as { email?: string }).email;
+        if (currentEmail) {
+          deleteUserByEmail(currentEmail);
+        }
+      })
+      .then(() => {
+        cy.clearCookie("__session");
+      });
+  });
 }
 
 function deleteUserByEmail(email: string) {
@@ -83,7 +147,6 @@ function deleteUserByEmail(email: string) {
 // https://github.com/cypress-io/cypress/issues/7306
 // Also added custom types to avoid getting detached
 // https://github.com/cypress-io/cypress/issues/7306#issuecomment-1152752612
-// ===========================================================
 function visitAndCheck(url: string, waitTime = 1000) {
   cy.visit(url);
   cy.location("pathname").should("contain", url).wait(waitTime);
@@ -91,6 +154,7 @@ function visitAndCheck(url: string, waitTime = 1000) {
 
 export const registerCommands = () => {
   Cypress.Commands.add("login", login);
+  Cypress.Commands.add("loginAsAdmin", loginAsAdmin);
   Cypress.Commands.add("cleanupUser", cleanupUser);
   Cypress.Commands.add("visitAndCheck", visitAndCheck);
 };
