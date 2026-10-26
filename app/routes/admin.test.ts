@@ -1,63 +1,160 @@
+import { type LoaderFunctionArgs } from "@remix-run/node";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { LoaderFunctionArgs } from "@remix-run/node";
 
-vi.mock("~/session.server", () => ({
-  getUser: vi.fn(),
-}));
-
+import * as sessionModule from "~/session.server";
 import { loader } from "./admin";
-import { getUser } from "~/session.server";
 
-function makeRequest(url = "https://example.com/admin") {
-  return {
-    request: new Request(url),
-    params: {},
-    context: {},
-  } as unknown as LoaderFunctionArgs;
-}
+type MockUser = {
+  id: string;
+  email: string;
+  roles: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
 
-describe("admin route auth gate", () => {
+const makeUser = (overrides: Partial<MockUser> = {}): MockUser => ({
+  id: "user-1",
+  email: "test@example.com",
+  roles: "staff",
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  ...overrides,
+});
+
+describe("admin loader", () => {
   beforeEach(() => {
-    vi.resetAllMocks();
+    vi.restoreAllMocks();
   });
 
   it("redirects unauthenticated users to login", async () => {
-    vi.mocked(getUser).mockResolvedValue(null);
+    // unauthenticated user is handled before the role check
+    vi.spyOn(sessionModule, "getUser").mockResolvedValue(null);
 
-    const response = await loader(makeRequest());
+    const request = new Request("http://localhost/admin");
+    const result = await loader({ request } as LoaderFunctionArgs);
 
-    expect(response).toBeInstanceOf(Response);
-    expect(response.status).toBe(302);
-    expect(response.headers.get("Location")).toContain("/login");
+    expect(result).toBeInstanceOf(Response);
+
+    if (result instanceof Response) {
+      expect(result.status).toBe(302);
+      expect(result.headers.get("Location")).toBe(
+        "/login?redirectTo=%2Fadmin",
+      );
+    }
   });
 
-  it("throws a 403 for authenticated non-admin users", async () => {
-    vi.mocked(getUser).mockResolvedValue({
-      id: "user-123",
-      email: "student@unlv.nevada.edu",
-      roles: "staff",
-    });
+  it("throws a 403 when a user has no role", async () => {
+    // empty or missing role must be denied
+    vi.spyOn(sessionModule, "getUser").mockResolvedValue(
+      makeUser({
+        id: "user-2",
+        email: "norole@example.com",
+        roles: "",
+      }),
+    );
 
-    await expect(loader(makeRequest())).rejects.toMatchObject({
-      status: 403,
-    });
+    const request = new Request("http://localhost/admin");
+
+    await expect(
+      loader({ request } as LoaderFunctionArgs),
+    ).rejects.toThrow("Forbidden");
   });
 
-  it("allows authenticated admin users", async () => {
-    vi.mocked(getUser).mockResolvedValue({
-      id: "admin-123",
-      email: "admin@unlv.nevada.edu",
-      roles: "admin",
-    });
+  it("allows staff users to view the admin page", async () => {
+    // staff is allowed
+    vi.spyOn(sessionModule, "getUser").mockResolvedValue(
+      makeUser({
+        id: "user-3",
+        email: "staff@example.com",
+        roles: "staff",
+      }),
+    );
 
-    const result = await loader(makeRequest());
+    const request = new Request("http://localhost/admin");
+    const result = await loader({ request } as LoaderFunctionArgs);
 
-    expect(result).toMatchObject({
-      success: true,
-      user: {
-        id: "admin-123",
-        email: "admin@unlv.nevada.edu",
-      },
-    });
+    expect(result).not.toBeInstanceOf(Response);
+
+    if (!(result instanceof Response)) {
+      expect(result).toMatchObject({
+        success: true,
+        user: {
+          id: "user-3",
+          email: "staff@example.com",
+          roles: "staff",
+        },
+      });
+    }
+  });
+
+  it("allows admin users to view the admin page", async () => {
+    // admin is allowed
+    vi.spyOn(sessionModule, "getUser").mockResolvedValue(
+      makeUser({
+        id: "user-4",
+        email: "admin@example.com",
+        roles: "admin",
+      }),
+    );
+
+    const request = new Request("http://localhost/admin");
+    const result = await loader({ request } as LoaderFunctionArgs);
+
+    expect(result).not.toBeInstanceOf(Response);
+
+    if (!(result instanceof Response)) {
+      expect(result).toMatchObject({
+        success: true,
+        user: {
+          id: "user-4",
+          email: "admin@example.com",
+          roles: "admin",
+        },
+      });
+    }
+  });
+
+  it("allows super admin users to view the admin page", async () => {
+    // super admin is allowed
+    vi.spyOn(sessionModule, "getUser").mockResolvedValue(
+      makeUser({
+        id: "user-5",
+        email: "superadmin@example.com",
+        roles: "super admin",
+      }),
+    );
+
+    const request = new Request("http://localhost/admin");
+    const result = await loader({ request } as LoaderFunctionArgs);
+
+    expect(result).not.toBeInstanceOf(Response);
+
+    if (!(result instanceof Response)) {
+      expect(result).toMatchObject({
+        success: true,
+        user: {
+          id: "user-5",
+          email: "superadmin@example.com",
+          roles: "super admin",
+        },
+      });
+    }
+  });
+
+  it("throws a 403 for non-authorized roles", async () => {
+    // non-authorized role is denied; student is not a role in this schema
+    vi.spyOn(sessionModule, "getUser").mockResolvedValue(
+      makeUser({
+        id: "user-6",
+        email: "guest@example.com",
+        roles: "guest",
+      }),
+    );
+
+    const request = new Request("http://localhost/admin");
+
+    await expect(
+      loader({ request } as LoaderFunctionArgs),
+    ).rejects.toThrow("Forbidden");
   });
 });

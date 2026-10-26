@@ -33,7 +33,7 @@ async function createAndLogin(email: string, role = "staff") {
       email,
       roles: role,
       password: {
-        create: {
+        create: { // Hash the password
           hash: await import("bcryptjs").then(({ default: bcrypt }) =>
             bcrypt.hash(password, 10),
           ),

@@ -7,7 +7,7 @@ import { getUser } from "~/session.server";
 export async function loader({ request }: LoaderFunctionArgs) {
    // Protect the admin route:
   // 1) If the user is not authenticated -> redirect to login page (with redirectTo).
-  // 2) If authenticated but not an admin -> throw 403.
+  // 2) If authenticated but not in an allowed role -> throw 403.
   // 3) Otherwise return necessary data for the admin UI.
   const url = new URL(request.url);
 
@@ -21,14 +21,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   // In this repo, roles is a string on the User model, e.g. "staff" or "admin".
   // Normalize it into an array before checking access.
+  const allowedRoles = new Set(["staff", "admin", "super admin"]);
+
   const roles = (user.roles ?? "")
     .split(",")
     .map((role) => role.trim().toLowerCase())
     .filter(Boolean);
 
-  const isAdmin = roles.includes("admin");
+  const hasAllowedRole = roles.some((role) => allowedRoles.has(role));
 
-  if (!isAdmin) {
+  if (!hasAllowedRole) {
     // Throw a 403 that will display a denial message.
     throw new Response("Forbidden", { status: 403 });
   }

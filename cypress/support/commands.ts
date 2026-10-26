@@ -92,15 +92,33 @@ function loginAsAdmin({
 function cleanupUser({ email }: { email?: string } = {}) {
   if (email) {
     deleteUserByEmail(email);
-  } else {
-    cy.get("@user").then((user) => {
-      const email = (user as { email?: string }).email;
-      if (email) {
-        deleteUserByEmail(email);
-      }
-    });
+    cy.clearCookie("__session");
+    return;
   }
-  cy.clearCookie("__session");
+
+  cy.then(() => {
+    try {
+      return Cypress.cy.state("aliases").user;
+    } catch {
+      return undefined;
+    }
+  }).then((userAlias) => {
+    if (!userAlias) {
+      cy.clearCookie("__session");
+      return;
+    }
+
+    cy.get("@user")
+      .then((user) => {
+        const currentEmail = (user as { email?: string }).email;
+        if (currentEmail) {
+          deleteUserByEmail(currentEmail);
+        }
+      })
+      .then(() => {
+        cy.clearCookie("__session");
+      });
+  });
 }
 
 function deleteUserByEmail(email: string) {
