@@ -43,7 +43,7 @@ model Password {
 model Student {
   id          String @id @default(cuid())
   nsheId      String @unique
-  rebelCardId String @unique
+  rebelCardId String? @unique
   name        String
   email       String @unique
 
