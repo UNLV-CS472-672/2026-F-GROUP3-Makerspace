@@ -241,7 +241,9 @@ export default function ScanPage() {
                 {loaderData.demoStudents.map(({ rebelCardId, name }) => (
                   <button
                     key={rebelCardId}
-                    onClick={() => setCardId(rebelCardId)}
+                    onClick={() => {
+                      if (rebelCardId) setCardId(rebelCardId);
+                    }}
                     className="flex w-full items-center gap-3 rounded-sm px-3 py-2 text-left transition-colors hover:bg-white/5"
                   >
                     <span
