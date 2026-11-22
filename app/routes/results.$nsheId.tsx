@@ -24,6 +24,8 @@ export async function loader(args: LoaderFunctionArgs) {
     return { error: "NSHE Id not found linked to a student" };
   }
   const machines = await prisma.machine.findMany({
+    // Machines an admin has taken out of service are never offered.
+    where: { isActive: true },
     include: {
       requirements: {
         include: {
