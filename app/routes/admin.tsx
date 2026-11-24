@@ -1,28 +1,22 @@
-import { redirect, type LoaderFunctionArgs } from "@remix-run/node";
-import { Link, useLoaderData } from "@remix-run/react";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import { json, redirect } from "@remix-run/node";
+import { Form, Link, useActionData, useLoaderData } from "@remix-run/react";
 import { useState } from "react";
 
+import { prisma } from "~/db.server";
 import { getUser } from "~/session.server";
+import { validateEmail } from "~/utils";
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  // Protect the admin route:
-  // 1) If the user is not authenticated -> redirect to login page (with redirectTo).
-  // 2) If authenticated but not in an allowed role -> throw 403.
-  // 3) Otherwise return necessary data for the admin UI.
   const url = new URL(request.url);
-
   const user = await getUser(request);
 
   if (!user) {
-    // Redirect to login and preserve where they wanted to go.
     const redirectTo = url.pathname + url.search;
     return redirect(`/login?redirectTo=${encodeURIComponent(redirectTo)}`);
   }
 
-  // In this repo, roles is a string on the User model, e.g. "staff" or "admin".
-  // Normalize it into an array before checking access.
   const allowedRoles = new Set(["staff", "admin", "super admin"]);
-
   const roles = (user.roles ?? "")
     .split(",")
     .map((role) => role.trim().toLowerCase())
@@ -31,11 +25,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const hasAllowedRole = roles.some((role) => allowedRoles.has(role));
 
   if (!hasAllowedRole) {
-    // Throw a 403 that will display a denial message.
     throw new Response("Forbidden", { status: 403 });
   }
 
-  // At this stage the user is authenticated and authorized.
+  const students = await prisma.student.findMany({
+    orderBy: { name: "asc" },
+    include: { certifications: true },
+  });
+
   return {
     success: true,
     user: {
@@ -43,46 +40,130 @@ export async function loader({ request }: LoaderFunctionArgs) {
       email: user.email,
       roles: roles.join(", "),
     },
+    students: students.map((student) => ({
+      id: student.id,
+      name: student.name,
+      nshe: student.nsheId,
+      rebel: student.rebelCardId,
+      email: student.email,
+      certs: student.certifications.length,
+    })),
   };
 }
 
-/**
- * TODO:
- * - Render the admin dashboard with tabs for Users, Machines,
- *    and Certifications.
- * - Each tab should display relevant data and
- *   provide functionality to manage users, machines, and certifications.
- * - Implement forms for adding new students and linking NSHE IDs to
- *    RebelCard IDs.
- * - Ensure proper styling and responsive design for the
- *    admin console.
- *
- * AI Usage: Github Copilot was used to assist in writing the code for the admin
- *           dashboard UI elements such as buttons, tabs, and forms. It provided
- *           suggestions for JSX structure and Tailwind CSS classes to achieve the
- *           desired layout and styling.
- *
- */
+export async function action({ request }: ActionFunctionArgs) {
+  const user = await getUser(request);
+
+  const allowedRoles = new Set(["staff", "admin", "super admin"]);
+  const roles = (user?.roles ?? "")
+    .split(",")
+    .map((role) => role.trim().toLowerCase())
+    .filter(Boolean);
+
+  const hasAllowedRole = roles.some((role) => allowedRoles.has(role));
+
+  if (!user || !hasAllowedRole) {
+    throw new Response("Forbidden", { status: 403 });
+  }
+
+  const formData = await request.formData();
+
+  if (formData.get("intent") === "link") {
+    const nsheId = String(formData.get("linkNsheId") ?? "").trim();
+    const newRebelCardId = String(formData.get("newRebelCardId") ?? "").trim();
+
+    const linkErrors: Record<string, string> = {};
+
+    if (!/^\d{10}$/.test(nsheId)) {
+      linkErrors.linkNsheId = "NSHE ID must be 10 digits";
+    }
+
+    if (!/^\d{10}$/.test(newRebelCardId)) {
+      linkErrors.newRebelCardId = "RebelCard ID must be 10 digits";
+    }
+
+    if (Object.keys(linkErrors).length > 0) {
+      return json({ errors: linkErrors }, { status: 400 });
+    }
+
+    const student = await prisma.student.findUnique({ where: { nsheId } });
+    if (!student) {
+      linkErrors.linkNsheId = "No student has this NSHE ID";
+      return json({ errors: linkErrors }, { status: 400 });
+    }
+
+    const cardInUse = await prisma.student.findUnique({
+      where: { rebelCardId: newRebelCardId },
+    });
+
+    if (cardInUse) {
+      linkErrors.newRebelCardId =
+        "This RebelCard ID is already assigned to a student";
+      return json({ errors: linkErrors }, { status: 400 });
+    }
+
+    await prisma.student.update({
+      where: { nsheId },
+      data: { rebelCardId: newRebelCardId },
+    });
+
+    return redirect("/admin");
+  }
+
+  const name = String(formData.get("fullName") ?? "").trim();
+  const nsheId = String(formData.get("nsheId") ?? "").trim();
+  const rebelCardId = String(formData.get("rebelCardId") ?? "").trim();
+  const email = String(formData.get("studentEmail") ?? "").trim();
+
+  const errors: Record<string, string> = {};
+
+  if (!name) errors.fullName = "Name is required";
+  if (!/^\d{10}$/.test(nsheId)) errors.nsheId = "NSHE ID must be 10 digits";
+  if (!/^\d{10}$/.test(rebelCardId)) {
+    errors.rebelCardId = "RebelCard ID must be 10 digits";
+  }
+  if (!validateEmail(email)) errors.studentEmail = "Email is invalid";
+
+  if (Object.keys(errors).length > 0) {
+    return json({ errors }, { status: 400 });
+  }
+
+  const existing = await prisma.student.findFirst({
+    where: { OR: [{ nsheId }, { rebelCardId }, { email }] },
+  });
+
+  if (existing) {
+    errors.form =
+      "A student with this NSHE ID, RebelCard ID, or email already exists";
+    return json({ errors }, { status: 400 });
+  }
+
+  await prisma.student.create({
+    data: { name, nsheId, rebelCardId, email },
+  });
+
+  return redirect("/admin");
+}
+
 export default function AdminPage() {
   const loaderData = useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
   const [activeTab, setActiveTab] = useState<"users" | "machines" | "certs">(
     "users",
   );
 
   const renderTabUnderline = (tab: "users" | "machines" | "certs") => {
     return activeTab === tab ? (
-      <span className="absolute -bottom-4 left-0 h-1 w-full rounded bg-[#c00000]" />
+      <span className="absolute left-0 -bottom-4 h-1 w-full rounded bg-[#c00000]" />
     ) : null;
   };
 
   return (
     <div className="min-h-screen bg-[#0f0f0f] text-white">
-      {/* Top header */}
       <header className="h-20 bg-[#c00000]">
         <div className="mx-auto flex h-full max-w-6xl items-center justify-between px-6">
           <div className="flex items-center gap-4">
-            {/* Circular UNLV mark */}
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white font-bold text-[#c00000]">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-[#c00000] font-bold">
               UNLV
             </div>
             <div>
@@ -104,7 +185,7 @@ export default function AdminPage() {
           </Link>
         </div>
       </header>
-      {/* Main content */}
+
       <main className="mx-auto max-w-6xl px-6 py-8">
         <h1 className="text-xl font-bold">Admin Dashboard</h1>
 
@@ -113,7 +194,7 @@ export default function AdminPage() {
             ? `Admin page is ready for development. Signed in as ${loaderData.user?.email ?? "admin"}`
             : "Unable to load the admin page."}
         </p>
-        {/* Tabs */}
+
         <nav className="mt-8 border-b border-gray-700">
           <ul className="flex gap-8">
             <li>
@@ -167,48 +248,26 @@ export default function AdminPage() {
         </nav>
 
         <div className="mt-8" />
-        {/* Student roster (table-like) */}
+
         <section>
           <h2 className="mb-4 text-sm uppercase text-gray-400">
             Student Roster
           </h2>
 
           <div className="overflow-hidden rounded border border-gray-800 bg-[#0c0c0c]">
-            <div className="grid grid-cols-12 gap-4 px-6 py-3 text-xs uppercase text-gray-400">
+            <div className="grid grid-cols-12 gap-4 px-6 py-3 text-xs text-gray-400 uppercase">
               <div className="col-span-4 font-semibold">Name</div>
               <div className="col-span-2 font-semibold">NSHE ID</div>
               <div className="col-span-2 font-semibold">RebelCard ID</div>
               <div className="col-span-3 font-semibold">Email</div>
               <div className="col-span-1 text-right font-semibold">Certs</div>
             </div>
-            {/* Example rows - replace with live data later */}
+
             <div className="divide-y divide-gray-800">
-              {[
-                {
-                  name: "Maria Sanchez",
-                  nshe: "2001234567",
-                  rebel: "1001234567",
-                  email: "m.sanchez@unlv.nevada.edu",
-                  certs: 2,
-                },
-                {
-                  name: "James Okafor",
-                  nshe: "2009876543",
-                  rebel: "1009876543",
-                  email: "j.okafor@unlv.nevada.edu",
-                  certs: 4,
-                },
-                {
-                  name: "Taylor Kim",
-                  nshe: "2005551234",
-                  rebel: "1005551234",
-                  email: "t.kim@unlv.nevada.edu",
-                  certs: 0,
-                },
-              ].map((row, index) => (
+              {loaderData.students.map((row) => (
                 <div
-                  key={`${row.email}-${index}`}
-                  className="grid grid-cols-12 items-center gap-4 px-6 py-4 text-sm"
+                  key={row.id}
+                  className="grid grid-cols-12 gap-4 px-6 py-4 items-center text-sm"
                 >
                   <div className="col-span-4">
                     <div className="font-medium text-white">{row.name}</div>
@@ -224,7 +283,7 @@ export default function AdminPage() {
                     <span
                       className={`inline-block rounded px-2 py-1 text-xs font-semibold ${
                         row.certs > 0
-                          ? "border border-[#5a0000] bg-[#2b0000] text-[#ffb6b6]"
+                          ? "bg-[#2b0000] text-[#ffb6b6] border border-[#5a0000]"
                           : "bg-gray-800 text-gray-400"
                       }`}
                     >
@@ -236,37 +295,55 @@ export default function AdminPage() {
             </div>
           </div>
         </section>
-        {/* Two-column forms */}
+
         <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2">
-          {/* Left: Add New Student */}
-          <div className="rounded border border-gray-800 bg-[#0c0c0c] p-6">
+          <Form
+            method="post"
+            className="rounded border border-gray-800 bg-[#0c0c0c] p-6"
+          >
             <h3 className="mb-4 text-sm uppercase text-gray-400">
               Add New Student
             </h3>
 
-            <label
-              htmlFor="fullName"
-              className="mb-2 block text-xs text-gray-400"
-            >
+            {actionData?.errors?.form ? (
+              <p className="mb-4 text-sm text-red-400">
+                {actionData.errors.form}
+              </p>
+            ) : null}
+
+            <label htmlFor="fullName" className="mb-2 block text-xs text-gray-400">
               Full name
             </label>
             <input
               id="fullName"
-              className="mb-4 w-full rounded border border-gray-800 bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500"
+              name="fullName"
+              className="w-full rounded border border-gray-800 bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500"
               placeholder="Jane Smith"
             />
-            {/* Right: Link NSHE ID -> RebelCard */}
-            <label
-              htmlFor="nsheId"
-              className="mb-2 block text-xs text-gray-400"
-            >
+            {actionData?.errors?.fullName ? (
+              <p className="mb-4 pt-1 text-xs text-red-400">
+                {actionData.errors.fullName}
+              </p>
+            ) : (
+              <div className="mb-4" />
+            )}
+
+            <label htmlFor="nsheId" className="mb-2 block text-xs text-gray-400">
               NSHE ID
             </label>
             <input
               id="nsheId"
-              className="mb-4 w-full rounded border border-gray-800 bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500"
+              name="nsheId"
+              className="w-full rounded border border-gray-800 bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500"
               placeholder="2001234567"
             />
+            {actionData?.errors?.nsheId ? (
+              <p className="mb-4 pt-1 text-xs text-red-400">
+                {actionData.errors.nsheId}
+              </p>
+            ) : (
+              <div className="mb-4" />
+            )}
 
             <label
               htmlFor="rebelCardId"
@@ -276,9 +353,17 @@ export default function AdminPage() {
             </label>
             <input
               id="rebelCardId"
-              className="mb-4 w-full rounded border border-gray-800 bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500"
+              name="rebelCardId"
+              className="w-full rounded border border-gray-800 bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500"
               placeholder="1001234567"
             />
+            {actionData?.errors?.rebelCardId ? (
+              <p className="mb-4 pt-1 text-xs text-red-400">
+                {actionData.errors.rebelCardId}
+              </p>
+            ) : (
+              <div className="mb-4" />
+            )}
 
             <label
               htmlFor="studentEmail"
@@ -288,16 +373,32 @@ export default function AdminPage() {
             </label>
             <input
               id="studentEmail"
-              className="mb-6 w-full rounded border border-gray-800 bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500"
+              name="studentEmail"
+              className="w-full rounded border border-gray-800 bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500"
               placeholder="j.smith@unlv.nevada.edu"
             />
+            {actionData?.errors?.studentEmail ? (
+              <p className="mb-4 pt-1 text-xs text-red-400">
+                {actionData.errors.studentEmail}
+              </p>
+            ) : (
+              <div className="mb-6" />
+            )}
 
-            <button className="rounded bg-[#c00000] px-5 py-2 text-sm font-semibold transition-opacity hover:opacity-90">
+            <button
+              type="submit"
+              className="rounded bg-[#c00000] px-5 py-2 text-sm font-semibold transition-opacity hover:opacity-90"
+            >
               Add Student
             </button>
-          </div>
+          </Form>
 
-          <div className="rounded border border-gray-800 bg-[#0c0c0c] p-6">
+          <Form
+            method="post"
+            className="rounded border border-gray-800 bg-[#0c0c0c] p-6"
+          >
+            <input type="hidden" name="intent" value="link" />
+
             <h3 className="mb-4 text-sm uppercase text-gray-400">
               Link NSHE ID → RebelCard
             </h3>
@@ -310,9 +411,17 @@ export default function AdminPage() {
             </label>
             <input
               id="linkNsheId"
-              className="mb-4 w-full rounded border border-gray-800 bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500"
+              name="linkNsheId"
+              className="w-full rounded border border-gray-800 bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500"
               placeholder="2001234567"
             />
+            {actionData?.errors?.linkNsheId ? (
+              <p className="mb-4 pt-1 text-xs text-red-400">
+                {actionData.errors.linkNsheId}
+              </p>
+            ) : (
+              <div className="mb-4" />
+            )}
 
             <label
               htmlFor="newRebelCardId"
@@ -322,17 +431,28 @@ export default function AdminPage() {
             </label>
             <input
               id="newRebelCardId"
-              className="mb-6 w-full rounded border border-gray-800 bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500"
+              name="newRebelCardId"
+              className="w-full rounded border border-gray-800 bg-[#080808] px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500"
               placeholder="1001234567"
             />
+            {actionData?.errors?.newRebelCardId ? (
+              <p className="mb-6 pt-1 text-xs text-red-400">
+                {actionData.errors.newRebelCardId}
+              </p>
+            ) : (
+              <div className="mb-6" />
+            )}
 
-            <button className="rounded bg-[#c00000] px-5 py-2 text-sm font-semibold transition-opacity hover:opacity-90">
+            <button
+              type="submit"
+              className="rounded bg-[#c00000] px-5 py-2 text-sm font-semibold transition-opacity hover:opacity-90"
+            >
               Link IDs
             </button>
-          </div>
+          </Form>
         </div>
       </main>
-      {/* Floating help button */}
+
       <div className="fixed bottom-6 right-6">
         <button className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-700 bg-[#111111] text-gray-300">
           ?
