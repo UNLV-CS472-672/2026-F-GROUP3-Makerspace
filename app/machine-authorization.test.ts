@@ -2,20 +2,26 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock Prisma queries so tests never connect to the real database.
-const { findStudent, findMachines } = vi.hoisted(() => ({
+const { findStudent, findMachines, findCertifications } = vi.hoisted(() => ({
   findStudent: vi.fn(),
   findMachines: vi.fn(),
+  findCertifications: vi.fn(),
 }));
 
 vi.mock("~/db.server", () => ({
   prisma: {
     student: { findUnique: findStudent },
     machine: { findMany: findMachines },
+    certification: { findMany: findCertifications },
   },
 }));
 
 // Test the existing results-page backend without changing it.
-import { loader } from "./routes/results.$nsheId";
+import { getCategoryIconType, loader } from "./routes/results.$nsheId";
+
+function certificationId(name: string) {
+  return `cert-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+}
 
 // Create a test student with the supplied certifications.
 function studentWithCerts(...certifications: string[]) {
@@ -23,28 +29,28 @@ function studentWithCerts(...certifications: string[]) {
     id: "student-1",
     nsheId: "1000000000",
     certifications: certifications.map((name) => ({
-      certification: { name },
+      certificationId: certificationId(name),
+      completedAt: new Date("2026-01-01T00:00:00.000Z"),
+      certification: { id: certificationId(name), name },
     })),
   };
 }
 
 // Create a test machine with certification requirements.
-function machine(
-  name: string,
-  requiredCerts: string[],
-  isActive = true,
-) {
+function machine(name: string, requiredCerts: string[], isActive = true) {
   return {
     id: name,
     name,
     isActive,
+    category: { id: "category-1", name: "Test Machines" },
     requirements: requiredCerts.map((cert) => ({
-      certification: { name: cert },
+      certificationId: certificationId(cert),
+      certification: { id: certificationId(cert), name: cert },
     })),
   };
 }
 
- // Run the actual results-page loader with a test NSHE ID.
+// Run the actual results-page loader with a test NSHE ID.
 async function loadEligibilityResults(nsheId = "1000000000") {
   return loader({
     request: new Request(`http://localhost/results/${nsheId}`),
@@ -56,14 +62,13 @@ async function loadEligibilityResults(nsheId = "1000000000") {
 // Clear mocked database responses before each test.
 beforeEach(() => {
   vi.resetAllMocks();
+  findCertifications.mockResolvedValue([]);
 });
 
 describe("Machine certification eligibility", () => {
   it("lists a machine when the student has the required certification", async () => {
     findStudent.mockResolvedValue(studentWithCerts("Laser Safety"));
-    findMachines.mockResolvedValue([
-      machine("Laser Cutter", ["Laser Safety"]),
-    ]);
+    findMachines.mockResolvedValue([machine("Laser Cutter", ["Laser Safety"])]);
 
     const result = await loadEligibilityResults();
 
@@ -74,9 +79,7 @@ describe("Machine certification eligibility", () => {
 
   it("excludes machines when required certifications are missing", async () => {
     findStudent.mockResolvedValue(studentWithCerts("3D Printing"));
-    findMachines.mockResolvedValue([
-      machine("Laser Cutter", ["Laser Safety"]),
-    ]);
+    findMachines.mockResolvedValue([machine("Laser Cutter", ["Laser Safety"])]);
 
     const result = await loadEligibilityResults();
 
@@ -115,9 +118,7 @@ describe("Machine certification eligibility", () => {
 
   it("lists machines with no certification requirements", async () => {
     findStudent.mockResolvedValue(studentWithCerts());
-    findMachines.mockResolvedValue([
-      machine("Basic Workbench", []),
-    ]);
+    findMachines.mockResolvedValue([machine("Basic Workbench", [])]);
 
     const result = await loadEligibilityResults();
 
@@ -137,10 +138,7 @@ describe("Machine certification eligibility", () => {
     const result = await loadEligibilityResults();
 
     expect(result).toMatchObject({
-      useAbleMachines: [
-        { name: "3D Printer" },
-        { name: "Basic Workbench" },
-      ],
+      useAbleMachines: [{ name: "3D Printer" }, { name: "Basic Workbench" }],
     });
   });
 
@@ -156,9 +154,30 @@ describe("Machine certification eligibility", () => {
     expect(findMachines).not.toHaveBeenCalled();
   });
 
-  // Future requirement:
-  // Confirm with Jeff and the team whether inactive machines
-  // should be excluded from the eligibility results page.
-  // The current loader does not check the isActive field.
-  it.todo("excludes inactive machines from eligibility results");
+  it("queries only active machines", async () => {
+    findStudent.mockResolvedValue(studentWithCerts());
+    findMachines.mockResolvedValue([]);
+
+    await loadEligibilityResults();
+
+    expect(findMachines).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { isActive: true } }),
+    );
+  });
+});
+
+describe("machine category icon matching", () => {
+  it.each([
+    ["Additive Manufacturing / FDM", "printing"],
+    ["Laser Engraving Lab", "laser"],
+    ["MIG & TIG Welders", "welding"],
+    ["Metal Turning (Lathes)", "lathe"],
+    ["CNC Router Lab", "machining"],
+    ["Wood Shop", "woodworking"],
+    ["Electronics and Robotics", "electronics"],
+    ["Textile / Embroidery", "textiles"],
+    ["Future Equipment Category", "tools"],
+  ] as const)("matches %s to the %s icon", (categoryName, expectedIcon) => {
+    expect(getCategoryIconType(categoryName)).toBe(expectedIcon);
+  });
 });

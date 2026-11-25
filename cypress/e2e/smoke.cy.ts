@@ -41,7 +41,10 @@ describe("smoke tests", () => {
       cy.findByRole("button", { name: /check in/i }).click();
 
       cy.location("pathname").should("eq", `/results/${DEMO_STUDENT.nsheId}`);
-      cy.findByText(new RegExp(DEMO_STUDENT.name));
+      cy.findByRole("heading", {
+        name: DEMO_STUDENT.name,
+        level: 1,
+      }).should("be.visible");
       cy.findByText(new RegExp(DEMO_STUDENT.certification));
       cy.findByText(DEMO_STUDENT.machine);
     });

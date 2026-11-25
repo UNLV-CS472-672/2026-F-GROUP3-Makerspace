@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const db = vi.hoisted(() => ({
   student: { findUnique: vi.fn() },
   machine: { findMany: vi.fn() },
+  certification: { findMany: vi.fn() },
 }));
 vi.mock("~/db.server", () => ({ prisma: db }));
 
@@ -22,6 +23,8 @@ describe("results loader", () => {
   beforeEach(() => {
     db.student.findUnique.mockReset();
     db.machine.findMany.mockReset();
+    db.certification.findMany.mockReset();
+    db.certification.findMany.mockResolvedValue([]);
     db.student.findUnique.mockResolvedValue({
       name: "Maria Sanchez",
       certifications: [laserSafety],
