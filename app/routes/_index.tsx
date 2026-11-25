@@ -13,16 +13,23 @@ import { prisma } from "~/db.server";
 export const meta: MetaFunction = () => [{ title: "Scan your RebelCard" }];
 export async function action(args: ActionFunctionArgs) {
   const formData = await args.request.formData();
-  const rebelCardId = formData.get("rebelCardId");
-  if (typeof rebelCardId !== "string") {
+  const rawScan = formData.get("rebelCardId");
+  const scanned = typeof rawScan === "string" ? rawScan.trim() : "";
+  if (!scanned) {
     return { error: "Invalid RebelCard ID" };
   }
 
-  const student = await prisma.student.findUnique({
-    where: {
-      rebelCardId,
-    },
-  });
+  // A scan is either a card number (linked to a student) or a raw NSHE ID,
+  // because most cards scan the NSHE ID itself and those students have no card
+  // on file. A linked card number wins; the admin page refuses to link a card
+  // number that equals another student's NSHE ID, so the two never clash.
+  const student =
+    (await prisma.student.findUnique({
+      where: { rebelCardId: scanned },
+    })) ??
+    (await prisma.student.findUnique({
+      where: { nsheId: scanned },
+    }));
 
   if (!student) {
     return {
@@ -36,6 +43,8 @@ export async function action(args: ActionFunctionArgs) {
 
 export async function loader() {
   const demoStudents = await prisma.student.findMany({
+    // Only students with a card on file can be used as a one-click demo.
+    where: { rebelCardId: { not: null } },
     take: 3,
     orderBy: { createdAt: "desc" },
   });
