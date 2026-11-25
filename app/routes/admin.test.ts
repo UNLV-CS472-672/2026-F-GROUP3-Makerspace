@@ -22,6 +22,7 @@ const db = vi.hoisted(() => ({
     findFirst: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
+    updateMany: vi.fn(),
     delete: vi.fn(),
   },
   machine: {
@@ -44,6 +45,7 @@ const db = vi.hoisted(() => ({
   },
   machineRequirement: { create: vi.fn() },
   studentCertification: { create: vi.fn(), delete: vi.fn() },
+  $transaction: vi.fn(),
 }));
 vi.mock("~/db.server", () => ({ prisma: db }));
 
@@ -69,6 +71,7 @@ const makeUser = (overrides: Partial<MockUser> = {}): MockUser => ({
 const allWrites = [
   db.student.create,
   db.student.update,
+  db.student.updateMany,
   db.student.delete,
   db.machine.create,
   db.machine.update,
@@ -87,8 +90,14 @@ const allWrites = [
 beforeEach(() => {
   vi.restoreAllMocks();
   for (const model of Object.values(db)) {
+    if (typeof model === "function") continue;
     for (const fn of Object.values(model)) fn.mockReset();
   }
+  // The transaction callback just runs against the same mocked database.
+  db.$transaction.mockReset();
+  db.$transaction.mockImplementation((run: (tx: typeof db) => unknown) =>
+    run(db),
+  );
 
   db.student.findMany.mockResolvedValue([]);
   db.machine.findMany.mockResolvedValue([]);
@@ -97,6 +106,7 @@ beforeEach(() => {
 
   db.student.create.mockResolvedValue({});
   db.student.update.mockResolvedValue({});
+  db.student.updateMany.mockResolvedValue({ count: 1 });
   db.student.findUnique.mockResolvedValue({
     id: "s1",
     name: "Maria Sanchez",
@@ -623,8 +633,8 @@ describe("admin action", () => {
       const res = await run(forms["link-card"]);
 
       expect(await bodyOf(res)).toMatchObject({ ok: "link-card" });
-      expect(db.student.update).toHaveBeenCalledWith({
-        where: { nsheId: "2001112223" },
+      expect(db.student.updateMany).toHaveBeenCalledWith({
+        where: { nsheId: "2001112223", rebelCardId: null },
         data: { rebelCardId: "21234567890123" },
       });
     });
@@ -676,7 +686,29 @@ describe("admin action", () => {
       });
 
       expect(await bodyOf(res)).toMatchObject({ ok: "link-card" });
-      expect(db.student.update).toHaveBeenCalledTimes(1);
+      expect(db.student.updateMany).toHaveBeenCalledTimes(1);
+      // Only replaces the exact card the staff member confirmed.
+      expect(db.student.updateMany).toHaveBeenCalledWith({
+        where: { nsheId: "2001112223", rebelCardId: "1001234567" },
+        data: { rebelCardId: "21234567890123" },
+      });
+    });
+
+    it("does not overwrite a card another staff member changed meanwhile", async () => {
+      asStaff();
+      withExistingCard();
+      // The conditional update matches nothing: the card is no longer the
+      // value this staff member saw and confirmed.
+      db.student.updateMany.mockResolvedValue({ count: 0 });
+      const res = await run({
+        ...forms["link-card"],
+        confirmOverwrite: "1001234567",
+      });
+
+      expect(res.status).toBe(400);
+      const body = await bodyOf(res);
+      expect(body.ok).toBeNull();
+      expect(body.errors.newRebelCardId).toMatch(/changed by someone else/);
     });
 
     it("does not accept a confirmation for a different card", async () => {
@@ -706,7 +738,7 @@ describe("admin action", () => {
 
     it("rejects a card that is already assigned to another student", async () => {
       asStaff();
-      db.student.update.mockRejectedValue({
+      db.student.updateMany.mockRejectedValue({
         code: "P2002",
         meta: { target: ["rebelCardId"] },
       });
@@ -720,7 +752,7 @@ describe("admin action", () => {
 
     it("rethrows unexpected database errors", async () => {
       asStaff();
-      db.student.update.mockRejectedValue(new Error("db down"));
+      db.student.updateMany.mockRejectedValue(new Error("db down"));
 
       await expect(run(forms["link-card"])).rejects.toThrow("db down");
     });
@@ -827,6 +859,67 @@ describe("admin action", () => {
       });
       const res = await run(forms["add-machine"]);
 
+      expect(res.status).toBe(400);
+      expect((await bodyOf(res)).errors.machineName).toMatch(/already exists/);
+    });
+
+    it("creates the new category and the machine in one transaction", async () => {
+      asStaff();
+      // Give the transaction its own client so we can tell its writes apart
+      // from writes made outside it.
+      const tx = {
+        machineCategory: {
+          findFirst: vi.fn().mockResolvedValue(null),
+          aggregate: vi.fn().mockResolvedValue({ _max: { sortOrder: 3 } }),
+          create: vi.fn().mockResolvedValue({ id: "cat-new" }),
+        },
+        machine: { create: vi.fn().mockResolvedValue({}) },
+      };
+      db.$transaction.mockImplementation(
+        (run: (client: typeof tx) => unknown) => run(tx),
+      );
+
+      await run({
+        ...forms["add-machine"],
+        machineCategoryId: "",
+        newCategoryName: "Woodworking",
+      });
+
+      expect(db.$transaction).toHaveBeenCalledTimes(1);
+      expect(tx.machineCategory.create).toHaveBeenCalledTimes(1);
+      expect(tx.machine.create).toHaveBeenCalledTimes(1);
+      expect(db.machineCategory.create).not.toHaveBeenCalled();
+      expect(db.machine.create).not.toHaveBeenCalled();
+    });
+
+    it("rolls the new category back when the machine name is a duplicate", async () => {
+      asStaff();
+      db.machine.create.mockRejectedValue({
+        code: "P2002",
+        meta: { target: ["name"] },
+      });
+      // A real transaction rolls back when its callback throws; the mock
+      // lets that rejection propagate the same way.
+      let rolledBack = false;
+      db.$transaction.mockImplementation(
+        async (run: (client: typeof db) => unknown) => {
+          try {
+            return await run(db);
+          } catch (error) {
+            rolledBack = true;
+            throw error;
+          }
+        },
+      );
+
+      const res = await run({
+        ...forms["add-machine"],
+        machineCategoryId: "",
+        newCategoryName: "Woodworking",
+      });
+
+      expect(db.machineCategory.create).toHaveBeenCalledTimes(1);
+      expect(rolledBack).toBe(true);
       expect(res.status).toBe(400);
       expect((await bodyOf(res)).errors.machineName).toMatch(/already exists/);
     });

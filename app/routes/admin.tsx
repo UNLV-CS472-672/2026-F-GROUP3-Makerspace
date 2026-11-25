@@ -197,6 +197,16 @@ const needsOverwriteConfirmation = (name: string, currentCard: string) =>
 // Prisma reports database errors with a code: P2002 is a unique-constraint
 // violation (the clashing column(s) are in meta.target) and P2003 is a
 // foreign-key violation (the row being pointed at does not exist).
+// Thrown inside a transaction to roll it back and report a form error.
+class FormRejected extends Error {
+  errors: FormErrors;
+
+  constructor(errors: FormErrors) {
+    super("Form rejected");
+    this.errors = errors;
+  }
+}
+
 function prismaError(error: unknown) {
   if (typeof error !== "object" || error === null) return null;
   const { code, meta } = error as {
@@ -343,9 +353,13 @@ async function linkCard(text: Text) {
     return needsOverwriteConfirmation(student.name, student.rebelCardId);
   }
 
+  // Only write if the card is still exactly what we read above. If another
+  // staff member changed it in the meantime, nothing matches, so their change
+  // is never silently overwritten and no unconfirmed overwrite can slip in.
+  let updated;
   try {
-    await prisma.student.update({
-      where: { nsheId },
+    updated = await prisma.student.updateMany({
+      where: { nsheId, rebelCardId: student.rebelCardId },
       data: { rebelCardId: newRebelCardId },
     });
   } catch (error) {
@@ -355,6 +369,13 @@ async function linkCard(text: Text) {
       });
     }
     throw error;
+  }
+
+  if (updated.count === 0) {
+    return fail({
+      newRebelCardId:
+        "This student's card was changed by someone else just now. Nothing was saved, so check the student and try again.",
+    });
   }
 
   return succeed("link-card");
@@ -380,52 +401,69 @@ async function addMachine(text: Text) {
   );
   if (Object.keys(errors).length > 0) return fail(errors);
 
-  let resolvedCategoryId = categoryId;
+  // The category and the machine are created in one transaction, so a machine
+  // that fails to save (for example a duplicate name) never leaves behind a
+  // brand-new empty category. Throwing FormRejected rolls everything back.
+  try {
+    await prisma.$transaction(async (tx) => {
+      let resolvedCategoryId = categoryId;
 
-  // A typed category takes priority over the dropdown. Matching an existing
-  // category ignoring case avoids near-duplicates like "Laser cutting".
-  if (newCategoryName) {
-    const existing = await prisma.machineCategory.findFirst({
-      where: { name: { equals: newCategoryName, mode: "insensitive" } },
-      select: { id: true },
-    });
-
-    if (existing) {
-      resolvedCategoryId = existing.id;
-    } else {
-      const last = await prisma.machineCategory.aggregate({
-        _max: { sortOrder: true },
-      });
-      try {
-        const created = await prisma.machineCategory.create({
-          data: {
-            name: newCategoryName,
-            sortOrder: (last._max.sortOrder ?? 0) + 1,
-          },
+      // A typed category takes priority over the dropdown. Matching an
+      // existing category ignoring case avoids near-duplicates like
+      // "Laser cutting".
+      if (newCategoryName) {
+        const existing = await tx.machineCategory.findFirst({
+          where: { name: { equals: newCategoryName, mode: "insensitive" } },
           select: { id: true },
         });
-        resolvedCategoryId = created.id;
+
+        if (existing) {
+          resolvedCategoryId = existing.id;
+        } else {
+          const last = await tx.machineCategory.aggregate({
+            _max: { sortOrder: true },
+          });
+          try {
+            const created = await tx.machineCategory.create({
+              data: {
+                name: newCategoryName,
+                sortOrder: (last._max.sortOrder ?? 0) + 1,
+              },
+              select: { id: true },
+            });
+            resolvedCategoryId = created.id;
+          } catch (error) {
+            if (prismaError(error)?.code === "P2002") {
+              throw new FormRejected({
+                newCategoryName: "That category already exists",
+              });
+            }
+            throw error;
+          }
+        }
+      }
+
+      try {
+        await tx.machine.create({
+          data: { name, categoryId: resolvedCategoryId },
+        });
       } catch (error) {
-        if (prismaError(error)?.code === "P2002") {
-          return fail({ newCategoryName: "That category already exists" });
+        const info = prismaError(error);
+        if (info?.code === "P2002") {
+          throw new FormRejected({
+            machineName: "A machine with this name already exists",
+          });
+        }
+        if (info?.code === "P2003") {
+          throw new FormRejected({
+            machineCategoryId: "That category no longer exists",
+          });
         }
         throw error;
       }
-    }
-  }
-
-  try {
-    await prisma.machine.create({
-      data: { name, categoryId: resolvedCategoryId },
     });
   } catch (error) {
-    const info = prismaError(error);
-    if (info?.code === "P2002") {
-      return fail({ machineName: "A machine with this name already exists" });
-    }
-    if (info?.code === "P2003") {
-      return fail({ machineCategoryId: "That category no longer exists" });
-    }
+    if (error instanceof FormRejected) return fail(error.errors);
     throw error;
   }
 
