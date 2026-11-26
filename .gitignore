@@ -20,3 +20,5 @@ node_modules
 
 # ESP8266 local Wi-Fi credentials
 satellite/esp8266/esp8266_satellite/secrets.h
+
+/data/imports/

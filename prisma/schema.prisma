@@ -45,7 +45,7 @@ model Student {
   nsheId      String @unique
   rebelCardId String? @unique
   name        String
-  email       String @unique
+  email       String? @unique
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
